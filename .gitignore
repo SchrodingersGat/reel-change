@@ -1,1 +1,46 @@
 plan.md
+
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.history
+
+# IntelliJ / VS Code
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# FVM (local SDK link) - .fvmrc IS committed
+.fvm/
+
+# Flutter / Dart / Pub
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Android
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/.kotlin
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+
+# Secrets - app signing keys and local credentials must never be committed
+android/key.properties
+*.jks
+*.keystore
+.env
+*.env

@@ -1,1 +1,41 @@
-### Project Readme - TODO
+# SMT Reel Loader
+
+Android companion app for InvenTree: verify exact MPNs when loading reels onto an SMT machine. See `plan.md` for the full work plan.
+
+**Status:** login / auto-login only.
+
+## Setup
+
+Flutter is pinned with [fvm](https://fvm.app) (`.fvmrc` → 3.41.6). Prefix all Flutter commands with `fvm`:
+
+```sh
+fvm flutter pub get
+fvm flutter analyze
+fvm flutter test
+```
+
+## Running against a local InvenTree server
+
+On the Android emulator, forward the device's `localhost:8000` to the dev machine. The app then uses `http://localhost:8000` directly, which matches the server's `ALLOWED_HOSTS`:
+
+```sh
+adb reverse tcp:8000 tcp:8000
+fvm flutter run
+```
+
+Live login tests (skipped unless configured; credentials come from the environment, never from files):
+
+```sh
+INVENTREE_TEST_SERVER=http://localhost:8000 \
+INVENTREE_TEST_USERNAME=<user> INVENTREE_TEST_PASSWORD=<password> \
+fvm flutter test test/live_server_test.dart
+```
+
+## Authentication
+
+Session (cookie) authentication through InvenTree's allauth headless API, mirroring the official InvenTree app. Ported code is listed in `THIRD_PARTY_NOTICES.md`.
+
+- `lib/auth/auth_service.dart`: launch-time session restore, login (+ TOTP MFA), logout, 401 → login
+- `lib/auth/session_store.dart`: cookie jar bound to the server origin (ported verbatim)
+- `lib/core/api_client.dart`: HTTP client (CSRF headers; credentials only sent to the configured server; TLS always validated; redirects never followed)
+- `lib/core/credential_store.dart`: server address, username and session cookies kept in Android secure storage. The password is never stored, and app backup is disabled.

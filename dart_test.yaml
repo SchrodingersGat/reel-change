@@ -1,0 +1,3 @@
+tags:
+  live:
+    # Requires a real InvenTree server - see test/live_server_test.dart
