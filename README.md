@@ -2,7 +2,13 @@
 
 Android companion app for InvenTree: verify exact MPNs when loading reels onto an SMT machine. See `plan.md` for the full work plan.
 
-**Status:** login / auto-login only.
+**Status:** login / auto-login, location settings, and the three-step reel-loading workflow:
+
+1. **Scan part:** scan the empty reel and confirm the MPN against the SMT machine. Reels with no MPN link stop here with a data error.
+2. **Select reel:** pick a reel from the source location (exact MPN matches first, then alternates, then reels needing a data fix). The reel must be verified by scanning its label. Alternates need an extra confirmation.
+3. **Load:** review and adjust the quantity (default is the full reel), then transfer it into the machine location.
+
+Progress is shown at the bottom of the screen, and RESET is always available.
 
 ## Setup
 

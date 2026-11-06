@@ -33,4 +33,6 @@ Ported files:
 - `lib/auth/auth_result.dart` (adapted)
 - `lib/auth/allauth_client.dart` (adapted)
 - `lib/auth/auth_service.dart` (login flow adapted from `lib/auth/auth_manager.dart` and `lib/api.dart`)
+- `lib/scanner/eci.dart` (verbatim)
+- `lib/scanner/scanner_page.dart` (`scannedValue`, adapted from `lib/barcode/camera_controller.dart`)
 - `test/session_store_test.dart` (tests adapted from `test/auth_test.dart`)

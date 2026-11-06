@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_secure_storage: ^10.3.1 # Session cookies + server profile (Android Keystore)
+  mobile_scanner: ^7.2.0 # Camera barcode scanning (same as inventree-app)
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,8 @@
 import "dart:convert";
 import "dart:io";
 
+import "fake_inventory.dart";
+
 /// A minimal fake InvenTree server, implementing just enough of the REST and
 /// allauth headless APIs to exercise the login flow. Runs on localhost.
 class FakeInvenTree {
@@ -24,6 +26,8 @@ class FakeInvenTree {
   final Set<String> mfaUsers = {};
 
   int apiVersion = 571;
+
+  final FakeInventory inventory = FakeInventory();
 
   // Session id -> username (authenticated), or "?pending:<user>" during MFA
   final Map<String, String> sessions = {};
@@ -217,7 +221,18 @@ class FakeInvenTree {
         }
 
       default:
-        send(404, {"detail": "Not found"});
+        if (!authenticated) {
+          send(401, {
+            "detail": "Authentication credentials were not provided.",
+          });
+        } else {
+          final result = inventory.handle(method, request.uri, body);
+          if (result == null) {
+            send(404, {"detail": "Not found"});
+          } else {
+            send(result.$1, result.$2);
+          }
+        }
     }
 
     await response.close();

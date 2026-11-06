@@ -1,15 +1,17 @@
 import "package:flutter/material.dart";
 
 import "package:inventree_smt/auth/auth_service.dart";
+import "package:inventree_smt/core/settings_store.dart";
 import "package:inventree_smt/ui/home_screen.dart";
 import "package:inventree_smt/ui/login_screen.dart";
 import "package:inventree_smt/ui/splash_screen.dart";
 import "package:inventree_smt/ui/theme.dart";
 
 class SmtApp extends StatelessWidget {
-  const SmtApp({super.key, required this.auth});
+  const SmtApp({super.key, required this.auth, required this.settings});
 
   final AuthService auth;
+  final SettingsStore settings;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,7 @@ class SmtApp extends StatelessWidget {
             case AuthPhase.mfaRequired:
               return LoginScreen(auth: auth);
             case AuthPhase.connected:
-              return HomeScreen(auth: auth);
+              return HomeScreen(auth: auth, settings: settings);
           }
         },
       ),
