@@ -1,0 +1,13 @@
+# Pre-commit hooks - see https://pre-commit.com
+# Install once per clone:  pre-commit install
+#
+# Mirrors inventree-app, but runs dart format through fvm so the formatter
+# matches the pinned SDK (.fvmrc) - the same version CI checks against.
+repos:
+  - repo: local
+    hooks:
+      - id: dart-format
+        name: Dart Format
+        entry: fvm dart format
+        language: system
+        types: [dart]

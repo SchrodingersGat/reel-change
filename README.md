@@ -14,6 +14,24 @@ fvm flutter analyze
 fvm flutter test
 ```
 
+Code is formatted with `dart format`, and CI fails on unformatted code. Install the [pre-commit](https://pre-commit.com) hook once per clone, so formatting is applied on every commit:
+
+```sh
+pip install pre-commit   # if not already installed
+pre-commit install
+```
+
+If the hook reformats files, the commit is stopped. Re-stage the changes and commit again.
+
+## CI
+
+GitHub Actions (`.github/workflows/`), triggered on push / PR to `master`:
+
+- **CI** (`ci.yaml`): format check, `flutter analyze`, unit tests (excluding the `live` tag), coverage artifact
+- **Android** (`android.yaml`): debug APK build, uploaded as an artifact
+
+Both read the Flutter version from `.fvmrc`.
+
 ## Running against a local InvenTree server
 
 On the Android emulator, forward the device's `localhost:8000` to the dev machine. The app then uses `http://localhost:8000` directly, which matches the server's `ALLOWED_HOSTS`:
