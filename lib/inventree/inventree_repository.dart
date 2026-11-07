@@ -37,6 +37,34 @@ class DataIssue {
 }
 
 /// The outcome of resolving a scanned barcode.
+/// An error reported by a server barcode plugin which recognised the
+/// barcode but could not match it (e.g. several matching supplier parts).
+///
+/// InvenTree returns these with the name of the plugin. Its generic
+/// "No match found" (no plugin recognised the data) has `plugin: null`,
+/// which is told apart this way rather than by the (translated) message.
+class PluginError {
+  const PluginError(this.plugin, this.message);
+
+  final String plugin;
+  final String message;
+
+  static PluginError? fromResponse(Map<String, dynamic> body) {
+    final dynamic plugin = body["plugin"];
+    if (plugin is! String || plugin.trim().isEmpty) return null;
+
+    final dynamic error = body["error"];
+    final String message = switch (error) {
+      String s => s,
+      List<dynamic> l => l.whereType<String>().join(" "),
+      _ => "",
+    }.trim();
+    if (message.isEmpty) return null;
+
+    return PluginError(plugin.trim(), message);
+  }
+}
+
 sealed class ScanOutcome {
   const ScanOutcome();
 }
@@ -230,6 +258,9 @@ class InvenTreeRepository {
   /// Precedence: stock item label > manufacturer part > supplier part.
   /// If no barcode plugin recognises the data, it is tried as an exact MPN.
   /// A barcode which identifies a part but not its MPN is a [ScanDataError].
+  /// If a plugin recognised the barcode but reported an error (e.g. several
+  /// matching supplier parts), and the MPN lookup finds nothing either, the
+  /// plugin's error is shown rather than a generic "no match".
   Future<ScanOutcome> resolveBarcode(String raw) async {
     final String data = raw.trim();
 
@@ -256,8 +287,24 @@ class InvenTreeRepository {
         if (outcome != null) return outcome;
       }
 
-      // No plugin recognised it - try it as an exact MPN
-      return await _resolveMpn(data);
+      // No plugin matched it - try it as an exact MPN
+      final ScanOutcome fallback = await _resolveMpn(data);
+
+      final PluginError? pluginError = PluginError.fromResponse(body);
+      if (pluginError != null) {
+        appLog.warning(
+          "barcode",
+          "Barcode plugin ${pluginError.plugin}: ${pluginError.message}",
+        );
+        if (fallback is ScanNotFound) {
+          return ScanNotFound(
+            "InvenTree's ${pluginError.plugin} plugin recognised this barcode, "
+            "but could not match it: ${pluginError.message}",
+          );
+        }
+      }
+
+      return fallback;
     } on ApiException catch (e) {
       return ScanFailed(e.message);
     }

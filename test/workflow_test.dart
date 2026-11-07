@@ -131,6 +131,41 @@ void main() {
       );
     });
 
+    test("A plugin error is shown instead of a generic no-match", () async {
+      server.inventory.pluginErrors["[)>06DIGIKEY"] =
+          "Multiple matching supplier parts found";
+
+      final r = await repo.resolveBarcode("[)>06DIGIKEY");
+      expect(r, isA<ScanNotFound>());
+      final String message = (r as ScanNotFound).message;
+      expect(message, contains("DigiKeyPlugin"));
+      expect(message, contains("Multiple matching supplier parts found"));
+
+      // Generic no-match keeps the generic message
+      final r2 = await repo.resolveBarcode("nothing-here");
+      expect((r2 as ScanNotFound).message, isNot(contains("plugin")));
+    });
+
+    test("A plugin error does not block an exact MPN match", () async {
+      server.inventory.pluginErrors["RC0402-10K"] = "Some plugin problem";
+      final r = await repo.resolveBarcode("RC0402-10K");
+      expect((r as ScanResolved).result.manufacturerPart.pk, 100);
+    });
+
+    test("Plugin errors are read from either response shape", () {
+      expect(
+        PluginError.fromResponse({"error": "No match", "plugin": null}),
+        isNull,
+      );
+      expect(PluginError.fromResponse({"plugin": "X"}), isNull);
+      final e = PluginError.fromResponse({
+        "error": ["Bad", "data"],
+        "plugin": " LCSC ",
+      })!;
+      expect(e.plugin, "LCSC");
+      expect(e.message, "Bad data");
+    });
+
     test("Barcode data is sent as JSON, not in the URL", () async {
       await repo.resolveBarcode("a&b=c?d");
       expect(server.requests, contains("POST /api/barcode/"));

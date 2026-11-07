@@ -137,6 +137,9 @@ class FakeInventory {
     11: "Mouser",
   };
 
+  // Barcode data -> error reported by a (supplier) barcode plugin
+  final Map<String, String> pluginErrors = {};
+
   // Set to make the supplier part list fail (names are optional)
   bool failSupplierPartList = false;
 
@@ -268,7 +271,29 @@ class FakeInventory {
       };
     }
 
-    return (400, {"error": "No match found for barcode data"});
+    // A plugin recognised the barcode but reported an error: InvenTree
+    // returns 200 with the error and the plugin name (no model keys)
+    final String? pluginError = pluginErrors[data];
+    if (pluginError != null) {
+      return (
+        200,
+        {
+          "error": pluginError,
+          "plugin": "DigiKeyPlugin",
+          "barcode_data": data,
+          "success": "Match found for barcode data",
+        },
+      );
+    }
+
+    return (
+      400,
+      {
+        "error": "No match found for barcode data",
+        "plugin": null,
+        "barcode_data": data,
+      },
+    );
   }
 
   (int, Object) _transfer(Map<String, dynamic> body) {
