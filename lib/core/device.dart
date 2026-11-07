@@ -1,6 +1,6 @@
 import "package:flutter/services.dart";
 
-import "package:inventree_smt/core/app_log.dart";
+import "package:reel_change/core/app_log.dart";
 
 /// Small native bridge (see android/.../MainActivity.kt):
 /// - keep the screen on (FLAG_KEEP_SCREEN_ON on the activity window)
@@ -12,7 +12,7 @@ class DeviceService {
   const DeviceService();
 
   static const MethodChannel _channel = MethodChannel(
-    "org.inventree.inventree_smt/device",
+    "org.inventree.reel_change/device",
   );
 
   Future<void> setKeepScreenOn(bool on) async {

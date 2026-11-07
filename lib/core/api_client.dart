@@ -4,9 +4,9 @@ import "dart:io";
 
 import "package:flutter/foundation.dart" show listEquals;
 
-import "package:inventree_smt/auth/session_store.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/certificates.dart";
+import "package:reel_change/auth/session_store.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/certificates.dart";
 
 /// Why a request could not be completed at the transport level.
 enum ApiFailure {

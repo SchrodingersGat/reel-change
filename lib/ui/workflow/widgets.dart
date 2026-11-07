@@ -1,10 +1,10 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/inventree/models.dart";
-import "package:inventree_smt/ui/theme.dart";
-import "package:inventree_smt/workflow/load_workflow.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
+import "package:reel_change/ui/theme.dart";
+import "package:reel_change/workflow/load_workflow.dart";
 
 enum StatusKind { ok, warning, error, info }
 

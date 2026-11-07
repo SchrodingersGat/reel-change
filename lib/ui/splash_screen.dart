@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
+import "package:reel_change/auth/auth_service.dart";
 
 /// Shown while checking for a stored session on launch.
 class SplashScreen extends StatelessWidget {
@@ -24,11 +24,11 @@ class SplashScreen extends StatelessWidget {
                 key: const Key("splash-logo"),
                 width: 160,
                 height: 160,
-                semanticLabel: "SMT Reel Loader logo",
+                semanticLabel: "Reel Change logo",
               ),
               const SizedBox(height: 24),
               Text(
-                "SMT Reel Loader",
+                "Reel Change",
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 32),

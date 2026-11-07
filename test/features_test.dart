@@ -4,12 +4,12 @@
 
 import "package:flutter_test/flutter_test.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/auth/session_store.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/credential_store.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/models.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/auth/session_store.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/credential_store.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/models.dart";
 
 import "fake_inventree.dart";
 

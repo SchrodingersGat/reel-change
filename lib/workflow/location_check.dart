@@ -1,7 +1,7 @@
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/inventree/models.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
 
 /// Result of re-checking the stored locations against the server.
 class LocationCheckResult {

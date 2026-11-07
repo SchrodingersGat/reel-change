@@ -1,19 +1,19 @@
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/device.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/ui/settings_screen.dart";
-import "package:inventree_smt/ui/theme.dart";
-import "package:inventree_smt/ui/workflow/done_step.dart";
-import "package:inventree_smt/ui/workflow/load_step.dart";
-import "package:inventree_smt/ui/workflow/scan_part_step.dart";
-import "package:inventree_smt/ui/workflow/select_stock_step.dart";
-import "package:inventree_smt/ui/workflow/widgets.dart";
-import "package:inventree_smt/workflow/load_workflow.dart";
-import "package:inventree_smt/workflow/location_check.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/device.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/ui/settings_screen.dart";
+import "package:reel_change/ui/theme.dart";
+import "package:reel_change/ui/workflow/done_step.dart";
+import "package:reel_change/ui/workflow/load_step.dart";
+import "package:reel_change/ui/workflow/scan_part_step.dart";
+import "package:reel_change/ui/workflow/select_stock_step.dart";
+import "package:reel_change/ui/workflow/widgets.dart";
+import "package:reel_change/workflow/load_workflow.dart";
+import "package:reel_change/workflow/location_check.dart";
 
 /// Main screen once logged in: hosts the reel-loading workflow, one step at a time.
 class HomeScreen extends StatefulWidget {
@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // workflow behind the dialog when it does.
           resizeToAvoidBottomInset: false,
           appBar: AppBar(
-            title: const Text("SMT Reel Loader"),
+            title: const Text("Reel Change"),
             actions: [
               if (configured)
                 Padding(

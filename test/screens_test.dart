@@ -8,18 +8,18 @@ import "dart:io";
 import "package:flutter/material.dart";
 import "package:flutter_test/flutter_test.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/credential_store.dart";
-import "package:inventree_smt/core/device.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/inventree/models.dart";
-import "package:inventree_smt/ui/home_screen.dart";
-import "package:inventree_smt/ui/settings_screen.dart";
-import "package:inventree_smt/ui/workflow/done_step.dart";
-import "package:inventree_smt/ui/workflow/select_stock_step.dart";
-import "package:inventree_smt/workflow/load_workflow.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/credential_store.dart";
+import "package:reel_change/core/device.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
+import "package:reel_change/ui/home_screen.dart";
+import "package:reel_change/ui/settings_screen.dart";
+import "package:reel_change/ui/workflow/done_step.dart";
+import "package:reel_change/ui/workflow/select_stock_step.dart";
+import "package:reel_change/workflow/load_workflow.dart";
 
 import "fake_inventree.dart";
 

@@ -5,7 +5,7 @@
     <!-- allowBackup=false: secure storage (session cookies, server address) is
          never included in cloud backups or device-to-device transfers -->
     <application
-        android:label="SMT Reel Loader"
+        android:label="Reel Change"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:name="${applicationName}"

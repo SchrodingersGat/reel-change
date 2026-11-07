@@ -15,8 +15,8 @@ import "dart:io";
 
 import "package:flutter_test/flutter_test.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/credential_store.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/credential_store.dart";
 
 void main() {
   final env = Platform.environment;

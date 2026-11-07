@@ -4,8 +4,8 @@
 //
 // MIT License - Copyright (c) 2019 InvenTree. See THIRD_PARTY_NOTICES.md.
 
-import "package:inventree_smt/auth/auth_result.dart";
-import "package:inventree_smt/core/api_client.dart";
+import "package:reel_change/auth/auth_result.dart";
+import "package:reel_change/core/api_client.dart";
 
 /*
  * Thin wrapper around the allauth "headless" API endpoints exposed by the server.

@@ -1,11 +1,11 @@
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/ui/home_screen.dart";
-import "package:inventree_smt/ui/login_screen.dart";
-import "package:inventree_smt/ui/splash_screen.dart";
-import "package:inventree_smt/ui/theme.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/ui/home_screen.dart";
+import "package:reel_change/ui/login_screen.dart";
+import "package:reel_change/ui/splash_screen.dart";
+import "package:reel_change/ui/theme.dart";
 
 class SmtApp extends StatefulWidget {
   const SmtApp({super.key, required this.auth, required this.settings});
@@ -47,7 +47,7 @@ class _SmtAppState extends State<SmtApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "SMT Reel Loader",
+      title: "Reel Change",
       navigatorKey: _navigator,
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),

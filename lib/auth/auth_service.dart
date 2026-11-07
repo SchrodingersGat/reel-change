@@ -6,13 +6,13 @@
 
 import "package:flutter/foundation.dart";
 
-import "package:inventree_smt/auth/allauth_client.dart";
-import "package:inventree_smt/auth/auth_result.dart";
-import "package:inventree_smt/auth/session_store.dart";
-import "package:inventree_smt/core/api_client.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/certificates.dart";
-import "package:inventree_smt/core/credential_store.dart";
+import "package:reel_change/auth/allauth_client.dart";
+import "package:reel_change/auth/auth_result.dart";
+import "package:reel_change/auth/session_store.dart";
+import "package:reel_change/core/api_client.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/certificates.dart";
+import "package:reel_change/core/credential_store.dart";
 
 enum AuthPhase {
   /// Checking for a stored session on launch (or retrying a connection).

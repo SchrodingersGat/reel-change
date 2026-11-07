@@ -3,8 +3,8 @@ import "dart:convert";
 import "package:flutter/foundation.dart";
 import "package:flutter_secure_storage/flutter_secure_storage.dart";
 
-import "package:inventree_smt/auth/session_store.dart";
-import "package:inventree_smt/inventree/models.dart";
+import "package:reel_change/auth/session_store.dart";
+import "package:reel_change/inventree/models.dart";
 
 /// Device settings for the reel-loading workflow.
 class WorkflowSettings {

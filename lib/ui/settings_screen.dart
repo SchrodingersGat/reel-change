@@ -2,16 +2,16 @@ import "dart:async";
 
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/certificates.dart";
-import "package:inventree_smt/core/device.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/inventree/models.dart";
-import "package:inventree_smt/ui/log_screen.dart";
-import "package:inventree_smt/ui/theme.dart";
-import "package:inventree_smt/ui/workflow/widgets.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/certificates.dart";
+import "package:reel_change/core/device.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
+import "package:reel_change/ui/log_screen.dart";
+import "package:reel_change/ui/theme.dart";
+import "package:reel_change/ui/workflow/widgets.dart";
 
 /// App settings: locations, workflow behaviour, connection, log, about.
 /// Changes are saved as soon as they are made.

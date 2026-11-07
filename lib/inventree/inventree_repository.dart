@@ -1,7 +1,7 @@
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/auth/allauth_client.dart";
-import "package:inventree_smt/core/api_client.dart";
-import "package:inventree_smt/inventree/models.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/auth/allauth_client.dart";
+import "package:reel_change/core/api_client.dart";
+import "package:reel_change/inventree/models.dart";
 
 /// Longest barcode payload accepted (anything longer is not a part label).
 const int kMaxBarcodeLength = 4096;

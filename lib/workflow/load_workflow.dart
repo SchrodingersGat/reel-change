@@ -1,9 +1,9 @@
 import "package:flutter/foundation.dart";
 
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/core/settings_store.dart";
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/inventree/models.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/core/settings_store.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
 
 enum WorkflowStep {
   /// 1. Scan the empty reel and confirm the part / MPN.
@@ -521,7 +521,7 @@ class LoadWorkflow extends ChangeNotifier {
     final StockItemInfo item = _selected!.item;
 
     final buffer = StringBuffer(
-      "SMT reel load (SMT Reel Loader app). Expected MPN ${expected.manufacturerPart.mpn}",
+      "SMT reel load (Reel Change app). Expected MPN ${expected.manufacturerPart.mpn}",
     );
     if (expected.manufacturerPart.manufacturerName.isNotEmpty) {
       buffer.write(" (${expected.manufacturerPart.manufacturerName})");

@@ -4,7 +4,7 @@
 //
 // MIT License - Copyright (c) 2019 InvenTree. See THIRD_PARTY_NOTICES.md.
 
-import "package:inventree_smt/core/api_client.dart";
+import "package:reel_change/core/api_client.dart";
 
 /*
  * Data types for responses from the (allauth headless) authentication API.

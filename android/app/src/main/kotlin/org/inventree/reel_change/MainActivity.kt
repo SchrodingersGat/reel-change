@@ -1,4 +1,4 @@
-package org.inventree.inventree_smt
+package org.inventree.reel_change
 
 import android.os.Build
 import android.view.WindowManager
@@ -11,7 +11,7 @@ import io.flutter.plugin.common.MethodChannel
  * (avoids adding plugin packages). See lib/core/device.dart.
  */
 class MainActivity : FlutterActivity() {
-    private val channelName = "org.inventree.inventree_smt/device"
+    private val channelName = "org.inventree.reel_change/device"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

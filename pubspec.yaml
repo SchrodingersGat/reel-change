@@ -1,5 +1,5 @@
-name: inventree_smt
-description: "SMT reel loader companion for InvenTree"
+name: reel_change
+description: "Reel Change - SMT reel change companion for InvenTree"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

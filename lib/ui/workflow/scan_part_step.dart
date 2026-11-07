@@ -1,10 +1,10 @@
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/inventree/inventree_repository.dart";
-import "package:inventree_smt/scanner/scanner_page.dart";
-import "package:inventree_smt/ui/theme.dart";
-import "package:inventree_smt/ui/workflow/widgets.dart";
-import "package:inventree_smt/workflow/load_workflow.dart";
+import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/scanner/scanner_page.dart";
+import "package:reel_change/ui/theme.dart";
+import "package:reel_change/ui/workflow/widgets.dart";
+import "package:reel_change/workflow/load_workflow.dart";
 
 /// Step 1: scan the empty reel, and confirm the part against the SMT machine.
 class ScanPartStep extends StatelessWidget {

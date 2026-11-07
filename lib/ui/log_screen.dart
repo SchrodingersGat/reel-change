@@ -1,8 +1,8 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
-import "package:inventree_smt/core/app_log.dart";
-import "package:inventree_smt/ui/theme.dart";
+import "package:reel_change/core/app_log.dart";
+import "package:reel_change/ui/theme.dart";
 
 /// Shows everything logged since the app was launched (newest first).
 /// The log is held in memory only and is discarded when the app closes.

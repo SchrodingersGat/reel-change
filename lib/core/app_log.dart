@@ -80,7 +80,7 @@ class AppLog extends ChangeNotifier {
   /// Plain-text copy of the log (for copying to a support request).
   String export({LogLevel minLevel = LogLevel.debug}) {
     final buffer = StringBuffer(
-      "SMT Reel Loader log - app started ${startedAt.toIso8601String()}\n",
+      "Reel Change log - app started ${startedAt.toIso8601String()}\n",
     );
     for (final e in _entries.where((e) => e.level.index >= minLevel.index)) {
       buffer.writeln(e);

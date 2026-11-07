@@ -1,9 +1,9 @@
 import "package:flutter/material.dart";
 
-import "package:inventree_smt/auth/auth_service.dart";
-import "package:inventree_smt/core/api_client.dart";
-import "package:inventree_smt/core/certificates.dart";
-import "package:inventree_smt/ui/theme.dart";
+import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/core/api_client.dart";
+import "package:reel_change/core/certificates.dart";
+import "package:reel_change/ui/theme.dart";
 
 /// Login form (server, username, password), plus the MFA code step.
 class LoginScreen extends StatefulWidget {
@@ -110,7 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final bool mfa = auth.phase == AuthPhase.mfaRequired;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("SMT Reel Loader")),
+      appBar: AppBar(title: const Text("Reel Change")),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(24),

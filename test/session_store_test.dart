@@ -9,7 +9,7 @@ import "dart:io";
 
 import "package:flutter_test/flutter_test.dart";
 
-import "package:inventree_smt/auth/session_store.dart";
+import "package:reel_change/auth/session_store.dart";
 
 const String server = "https://inventree.example.com";
 

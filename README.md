@@ -1,4 +1,4 @@
-# SMT Reel Loader
+# Reel Change
 
 Android companion app for InvenTree: verify exact MPNs when loading reels onto an SMT machine. See `plan.md` for the full work plan.
 
