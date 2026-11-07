@@ -29,6 +29,25 @@ pre-commit install
 
 If the hook reformats files, the commit is stopped. Re-stage the changes and commit again.
 
+## App icon and splash
+
+The source is `img/logo.svg`. It is used in three forms (no icon/splash packages are used):
+
+- `android/app/src/main/res/drawable/ic_logo.xml`: hand-converted Android vector. It is used for the adaptive launcher icon (`mipmap-anydpi-v26`, Android 8+) and the launch splash (`launch_background.xml`, plus `values-v31` for the Android 12+ system splash).
+- `android/app/src/main/res/mipmap-*/ic_launcher.png`: legacy icons for Android 7 and older.
+- `assets/images/logo.png`: the logo on the in-app splash screen.
+
+If the logo changes, update `ic_logo.xml` by hand and re-render the PNGs with Inkscape:
+
+```sh
+INK="/c/Program Files/Inkscape/bin/inkscape.exe"
+for p in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+  "$INK" img/logo.svg --export-type=png --export-area-page -w ${p#*:} -h ${p#*:} \
+    --export-filename=android/app/src/main/res/mipmap-${p%%:*}/ic_launcher.png
+done
+"$INK" img/logo.svg --export-type=png --export-area-page -w 512 -h 512 --export-filename=assets/images/logo.png
+```
+
 ## CI
 
 GitHub Actions (`.github/workflows/`), triggered on push / PR to `master`:

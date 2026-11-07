@@ -8,6 +8,7 @@ import "package:inventree_smt/core/settings_store.dart";
 import "package:inventree_smt/inventree/models.dart";
 import "package:inventree_smt/scanner/scanner_page.dart";
 import "package:inventree_smt/ui/home_screen.dart";
+import "package:inventree_smt/ui/splash_screen.dart";
 import "package:inventree_smt/ui/workflow/widgets.dart";
 import "package:inventree_smt/workflow/load_workflow.dart";
 
@@ -197,5 +198,13 @@ void main() {
       expect(result, submit == "OK" ? "INV-SI330" : null);
       expect(find.byType(AlertDialog), findsNothing);
     }
+  });
+
+  testWidgets("Splash screen shows the logo", (tester) async {
+    final auth = AuthService(store: MemoryCredentialStore());
+    await tester.pumpWidget(MaterialApp(home: SplashScreen(auth: auth)));
+
+    final Image logo = tester.widget(find.byKey(const Key("splash-logo")));
+    expect((logo.image as AssetImage).assetName, "assets/images/logo.png");
   });
 }

@@ -19,10 +19,12 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.precision_manufacturing,
-                size: 96,
-                color: Theme.of(context).colorScheme.primary,
+              Image.asset(
+                "assets/images/logo.png",
+                key: const Key("splash-logo"),
+                width: 160,
+                height: 160,
+                semanticLabel: "SMT Reel Loader logo",
               ),
               const SizedBox(height: 24),
               Text(
