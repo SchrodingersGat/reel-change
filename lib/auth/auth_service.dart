@@ -10,6 +10,8 @@ import "package:inventree_smt/auth/allauth_client.dart";
 import "package:inventree_smt/auth/auth_result.dart";
 import "package:inventree_smt/auth/session_store.dart";
 import "package:inventree_smt/core/api_client.dart";
+import "package:inventree_smt/core/app_log.dart";
+import "package:inventree_smt/core/certificates.dart";
 import "package:inventree_smt/core/credential_store.dart";
 
 enum AuthPhase {
@@ -26,6 +28,44 @@ enum AuthPhase {
   connected,
 }
 
+/// The user's InvenTree roles (from `user/me/roles/`).
+class UserRoles {
+  const UserRoles({this.roles = const {}, this.superuser = false});
+
+  factory UserRoles.fromJson(Map<String, dynamic> json) {
+    final Map<String, Set<String>> roles = {};
+    final dynamic r = json["roles"];
+    if (r is Map) {
+      r.forEach((key, value) {
+        roles[key.toString()] = value is List
+            ? value.map((v) => v.toString()).toSet()
+            : <String>{};
+      });
+    }
+    return UserRoles(roles: roles, superuser: json["is_superuser"] == true);
+  }
+
+  final Map<String, Set<String>> roles;
+  final bool superuser;
+
+  bool can(String role, String permission) =>
+      superuser || (roles[role]?.contains(permission) ?? false);
+
+  /// Permissions the reel-loading workflow needs: role, permission, why.
+  static const List<(String, String, String)> required = [
+    ("part", "view", "Parts - view (look up parts and MPNs)"),
+    ("stock", "view", "Stock - view (list reels)"),
+    ("stock", "change", "Stock - change (move reels into the machine)"),
+    ("stock_location", "view", "Stock locations - view (choose locations)"),
+  ];
+
+  /// Descriptions of required permissions the user does not have.
+  List<String> get missing => [
+    for (final (role, perm, label) in required)
+      if (!can(role, perm)) label,
+  ];
+}
+
 /// Details of the verified connection, for display.
 class ConnectionInfo {
   const ConnectionInfo({
@@ -35,7 +75,11 @@ class ConnectionInfo {
     this.serverVersion = "",
     this.instanceName = "",
     this.apiVersion = 0,
+    this.roles = const UserRoles(),
   });
+
+  /// The user's permissions on the server.
+  final UserRoles roles;
 
   final String server;
   final String username;
@@ -109,6 +153,20 @@ class AuthService extends ChangeNotifier {
 
   Map<String, dynamic> _serverInfo = {};
 
+  CertificateInfo? _pendingCertificate;
+
+  /// A server certificate which failed validation - the user may choose to
+  /// trust it (see [trustPendingCertificate]).
+  CertificateInfo? get pendingCertificate => _pendingCertificate;
+
+  bool _certificateChanged = false;
+
+  /// True if [pendingCertificate] replaces a certificate the user had trusted.
+  bool get certificateChanged => _certificateChanged;
+
+  /// The certificate the user has trusted for the current server, if any.
+  TrustedCertificate? get trustedCertificate => api.trustedCertificate;
+
   // Login in progress
   String _pendingServer = "";
   String _pendingUsername = "";
@@ -123,10 +181,20 @@ class AuthService extends ChangeNotifier {
     bool? canRetry,
     bool messageIsError = true,
   }) {
-    if (phase != null) _phase = phase;
+    if (phase != null && phase != _phase) {
+      appLog.debug("auth", "State: ${_phase.name} -> ${phase.name}");
+      _phase = phase;
+    }
     if (message != null) {
       _message = message;
       _messageIsError = messageIsError;
+      if (message.isNotEmpty) {
+        appLog.add(
+          messageIsError ? LogLevel.warning : LogLevel.info,
+          "auth",
+          message,
+        );
+      }
     }
     if (busy != null) _busy = busy;
     if (canRetry != null) _canRetry = canRetry;
@@ -198,6 +266,13 @@ class AuthService extends ChangeNotifier {
     final SessionStore session = SessionStore.fromJson(profile.server, data);
 
     _attach(profile.server, session);
+    await _loadTrust(profile.server);
+
+    appLog.info(
+      "auth",
+      "Launch: stored profile for ${profile.server} "
+          "(${session.hasSession ? "session found" : "no session"})",
+    );
 
     // Stored cookies belong to a different server address - remove them
     if (session.rejected) {
@@ -243,6 +318,21 @@ class AuthService extends ChangeNotifier {
     final ApiResponse me = await api.get("user/me/");
 
     if (me.isSuccess) {
+      final ApiResponse rolesResponse = await api.get("user/me/roles/");
+
+      if (!rolesResponse.isSuccess) {
+        _update(
+          phase: AuthPhase.loggedOut,
+          message: rolesResponse.isValid
+              ? "Could not check your permissions (status ${rolesResponse.statusCode})."
+              : describeFailure(rolesResponse),
+          busy: false,
+          canRetry: api.session.hasSession,
+        );
+        return;
+      }
+
+      final UserRoles roles = UserRoles.fromJson(rolesResponse.asMap());
       final Map<String, dynamic> user = me.asMap();
       final String fullName = [
         user["first_name"],
@@ -256,7 +346,20 @@ class AuthService extends ChangeNotifier {
         serverVersion: (_serverInfo["version"] ?? "").toString(),
         instanceName: (_serverInfo["instance"] ?? "").toString(),
         apiVersion: (_serverInfo["apiVersion"] as int?) ?? 0,
+        roles: roles,
       );
+
+      appLog.info(
+        "auth",
+        "Connected to ${api.server} as ${_info!.username} "
+            "(InvenTree ${_info!.serverVersion}, API ${_info!.apiVersion})",
+      );
+      if (roles.missing.isNotEmpty) {
+        appLog.warning(
+          "auth",
+          "Missing permissions: ${roles.missing.join("; ")}",
+        );
+      }
 
       _update(
         phase: AuthPhase.connected,
@@ -313,9 +416,24 @@ class AuthService extends ChangeNotifier {
   /// Check the server is reachable, is InvenTree, and is recent enough.
   /// Returns an error message, or null if OK.
   Future<String?> _checkServer() async {
+    _pendingCertificate = null;
+    api.lastRejectedCertificate = null;
+
     final ApiResponse response = await api.get("");
 
     if (!response.isValid) {
+      final CertificateInfo? cert = api.lastRejectedCertificate;
+
+      if (response.failure == ApiFailure.certificate && cert != null) {
+        _pendingCertificate = cert;
+        _certificateChanged = api.trustedCertificate != null;
+        return _certificateChanged
+            ? "WARNING: the server's security certificate has CHANGED since you trusted it. "
+                  "This can happen when the certificate is renewed - but it can also mean "
+                  "the connection is being intercepted."
+            : "The server's security certificate is not trusted (for example, it is self-signed).";
+      }
+
       return describeFailure(response);
     }
 
@@ -383,7 +501,10 @@ class AuthService extends ChangeNotifier {
     session.clearAuthCookies();
 
     _attach(server, session);
+    await _loadTrust(server);
     await _persistSession();
+
+    appLog.info("auth", "Login: $username at $server");
 
     _pendingServer = server;
     _pendingUsername = username;
@@ -528,6 +649,85 @@ class AuthService extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------------------
+  // Self-signed certificates
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadTrust(String server) async {
+    TrustedCertificate? trusted;
+    try {
+      trusted = TrustedCertificate.fromJson(
+        await _store.loadTrustedCertificate(),
+      );
+    } catch (_) {
+      trusted = null;
+    }
+    // Only ever applies to the server it was trusted for
+    api.trustedCertificate =
+        (trusted != null && trusted.origin == serverOrigin(server))
+        ? trusted
+        : null;
+  }
+
+  /// Trust [pendingCertificate] for the current server. The caller then
+  /// retries the login / connection. Returns false if it could not be saved.
+  Future<bool> trustPendingCertificate() async {
+    final CertificateInfo? cert = _pendingCertificate;
+    final Uri? server = Uri.tryParse(api.server);
+
+    if (cert == null ||
+        server == null ||
+        server.host.toLowerCase() != cert.host.toLowerCase() ||
+        server.port != cert.port) {
+      return false;
+    }
+
+    final trusted = TrustedCertificate(
+      origin: serverOrigin(api.server),
+      der: cert.der,
+    );
+
+    try {
+      await _store.saveTrustedCertificate(trusted.toJson());
+    } catch (_) {
+      _update(message: "The certificate could not be saved on this device.");
+      return false;
+    }
+
+    api.trustedCertificate = trusted;
+    _pendingCertificate = null;
+    _certificateChanged = false;
+
+    appLog.warning(
+      "tls",
+      "User trusted certificate for ${trusted.origin}: SHA-256 ${trusted.fingerprint}",
+    );
+    _update(message: "");
+    return true;
+  }
+
+  /// Do not trust the pending certificate.
+  void rejectPendingCertificate() {
+    if (_pendingCertificate == null) return;
+    appLog.info("tls", "User did not trust the certificate");
+    _pendingCertificate = null;
+    notifyListeners();
+  }
+
+  /// Remove the trusted certificate (the next connection will ask again).
+  Future<void> forgetTrustedCertificate() async {
+    final TrustedCertificate? trusted = api.trustedCertificate;
+    if (trusted == null) return;
+    try {
+      await _store.saveTrustedCertificate(null);
+    } catch (_) {
+      // Removed from memory regardless
+    }
+    appLog.info("tls", "Trusted certificate removed for ${trusted.origin}");
+    api.trustedCertificate = null;
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
   // Logout / expiry
   // ---------------------------------------------------------------------------
 
@@ -547,6 +747,7 @@ class AuthService extends ChangeNotifier {
     await _persistSession();
 
     _info = null;
+    appLog.info("auth", "Logged out");
     _update(
       phase: AuthPhase.loggedOut,
       message: "You have been logged out.",

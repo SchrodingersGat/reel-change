@@ -20,6 +20,12 @@ abstract class CredentialStore {
 
   /// Store the serialized session. A null value removes it.
   Future<void> saveSession(String? data);
+
+  /// Serialized [TrustedCertificate] (see TrustedCertificate.toJson), or null.
+  Future<String?> loadTrustedCertificate();
+
+  /// Store the trusted certificate. A null value removes it.
+  Future<void> saveTrustedCertificate(String? data);
 }
 
 /// Everything is kept in platform secure storage (Android Keystore-backed,
@@ -34,6 +40,7 @@ class SecureCredentialStore implements CredentialStore {
   static const String _keyServer = "server";
   static const String _keyUsername = "username";
   static const String _keySession = "session";
+  static const String _keyCertificate = "trusted_certificate";
 
   @override
   Future<ServerProfile?> loadProfile() async {
@@ -56,6 +63,19 @@ class SecureCredentialStore implements CredentialStore {
   Future<String?> loadSession() => _storage.read(key: _keySession);
 
   @override
+  Future<String?> loadTrustedCertificate() =>
+      _storage.read(key: _keyCertificate);
+
+  @override
+  Future<void> saveTrustedCertificate(String? data) async {
+    if (data == null) {
+      await _storage.delete(key: _keyCertificate);
+    } else {
+      await _storage.write(key: _keyCertificate, value: data);
+    }
+  }
+
+  @override
   Future<void> saveSession(String? data) async {
     if (data == null) {
       await _storage.delete(key: _keySession);
@@ -69,6 +89,14 @@ class SecureCredentialStore implements CredentialStore {
 class MemoryCredentialStore implements CredentialStore {
   ServerProfile? profile;
   String? session;
+  String? trustedCertificate;
+
+  @override
+  Future<String?> loadTrustedCertificate() async => trustedCertificate;
+
+  @override
+  Future<void> saveTrustedCertificate(String? data) async =>
+      trustedCertificate = data;
 
   /// Set to make session writes throw (to test failure handling).
   bool failWrites = false;

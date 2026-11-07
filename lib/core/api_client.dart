@@ -1,9 +1,12 @@
 import "dart:async";
 import "dart:convert";
-import "dart:developer" as developer;
 import "dart:io";
 
+import "package:flutter/foundation.dart" show listEquals;
+
 import "package:inventree_smt/auth/session_store.dart";
+import "package:inventree_smt/core/app_log.dart";
+import "package:inventree_smt/core/certificates.dart";
 
 /// Why a request could not be completed at the transport level.
 enum ApiFailure {
@@ -117,24 +120,65 @@ bool isInsecureRemote(String server) {
 /// - credentials are only ever attached to requests for the configured server
 ///
 /// Differences from the official app:
-/// - TLS certificates are always validated (no "ignore bad certificate" mode)
+/// - TLS certificates are always validated. There is no "ignore bad certificate"
+///   mode; a self-signed certificate is only accepted if the user explicitly
+///   trusted that exact certificate for this server ([trustedCertificate]).
 /// - redirects are never followed
 class InvenTreeApi {
-  InvenTreeApi({HttpClient? httpClient})
-    : _client = httpClient ?? _createClient();
+  InvenTreeApi({HttpClient? httpClient}) {
+    _client = httpClient ?? HttpClient();
+    _client.connectionTimeout = const Duration(seconds: 10);
+    _client.badCertificateCallback = _onBadCertificate;
+  }
 
-  static HttpClient _createClient() {
-    final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 10);
-    // Note: no badCertificateCallback - invalid certificates are rejected.
-    return client;
+  late final HttpClient _client;
+
+  /// Certificate the user has trusted for the configured server (if any).
+  TrustedCertificate? trustedCertificate;
+
+  /// The last certificate rejected for the configured server - so the user
+  /// can be asked whether to trust it.
+  CertificateInfo? lastRejectedCertificate;
+
+  /// Called only when normal validation fails. Accepts the certificate only if
+  /// it is exactly the one the user trusted, for exactly this server origin.
+  bool _onBadCertificate(X509Certificate cert, String host, int port) {
+    final Uri? server = Uri.tryParse(_server);
+    final bool isServer =
+        server != null &&
+        server.scheme == "https" &&
+        server.host.toLowerCase() == host.toLowerCase() &&
+        server.port == port;
+
+    if (!isServer) {
+      appLog.warning(
+        "tls",
+        "Rejected invalid certificate from $host:$port (not the configured server)",
+      );
+      return false;
+    }
+
+    final TrustedCertificate? trusted = trustedCertificate;
+
+    if (trusted != null &&
+        trusted.origin == serverOrigin(_server) &&
+        listEquals(trusted.der, cert.der)) {
+      return true;
+    }
+
+    final info = CertificateInfo.fromX509(cert, host, port);
+    lastRejectedCertificate = info;
+    appLog.warning(
+      "tls",
+      "Rejected certificate from $host:$port - ${trusted == null ? "not trusted" : "DIFFERENT from the trusted certificate"}. "
+          "Subject: ${info.subject}; SHA-256 ${info.fingerprint}",
+    );
+    return false;
   }
 
   static const Duration _responseTimeout = Duration(seconds: 20);
 
   static const Set<String> _unsafeMethods = {"POST", "PUT", "PATCH", "DELETE"};
-
-  final HttpClient _client;
 
   String _server = "";
 
@@ -149,6 +193,7 @@ class InvenTreeApi {
 
   /// Point the client at a server, with the session to use for it.
   void configure(String server, SessionStore session) {
+    if (server != _server) lastRejectedCertificate = null;
     _server = server;
     this.session = session;
   }
@@ -264,7 +309,10 @@ class InvenTreeApi {
         response.data = null;
       }
 
-      _log("$method ${uri.path} -> ${response.statusCode}");
+      _log(
+        response.statusCode >= 400 ? LogLevel.warning : LogLevel.debug,
+        "$method ${uri.path} -> ${response.statusCode}",
+      );
 
       if (response.statusCode == 401 &&
           !uri.path.contains("/api/auth/") &&
@@ -292,14 +340,20 @@ class InvenTreeApi {
     }
 
     if (response.failure != ApiFailure.none) {
-      _log("$method ${uri.path} failed: ${response.failure.name}");
+      _log(
+        LogLevel.error,
+        "$method ${uri.path} failed: ${response.failure.name}"
+        "${response.failureDetail.isEmpty ? "" : " (${response.failureDetail})"}",
+      );
     }
 
     return response;
   }
 
-  // Only method, path and status are logged - never headers, bodies or query strings
-  void _log(String message) => developer.log(message, name: "InvenTreeApi");
+  // Only method, path and status are logged - never headers (cookies, CSRF
+  // token), bodies (passwords) or query strings
+  void _log(LogLevel level, String message) =>
+      appLog.add(level, "api", message);
 
   void close() => _client.close(force: true);
 }

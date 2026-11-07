@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "package:inventree_smt/auth/auth_service.dart";
+import "package:inventree_smt/core/device.dart";
 import "package:inventree_smt/core/settings_store.dart";
 import "package:inventree_smt/inventree/inventree_repository.dart";
 import "package:inventree_smt/ui/settings_screen.dart";
@@ -14,10 +15,16 @@ import "package:inventree_smt/workflow/load_workflow.dart";
 
 /// Main screen once logged in: hosts the reel-loading workflow, one step at a time.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.auth, required this.settings});
+  const HomeScreen({
+    super.key,
+    required this.auth,
+    required this.settings,
+    this.device = const DeviceService(),
+  });
 
   final AuthService auth;
   final SettingsStore settings;
+  final DeviceService device;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -32,9 +39,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _settingsLoaded = false;
 
+  // Current keep-screen-on state requested from the device
+  bool _screenKeptOn = false;
+
   @override
   void initState() {
     super.initState();
+    _workflow.addListener(_updateKeepScreenOn);
     widget.settings.addListener(_onSettingsChanged);
     widget.settings.load(widget.auth.api.server).whenComplete(() {
       if (mounted) setState(() => _settingsLoaded = true);
@@ -44,8 +55,22 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     widget.settings.removeListener(_onSettingsChanged);
+    _workflow.removeListener(_updateKeepScreenOn);
     _workflow.dispose();
+    if (_screenKeptOn) widget.device.setKeepScreenOn(false);
     super.dispose();
+  }
+
+  /// A reel swap is under way (from the first scan until done or reset).
+  bool get _workflowActive =>
+      _workflow.canReset && _workflow.step != WorkflowStep.done;
+
+  /// Keep the screen on while a swap is active (if enabled in settings).
+  void _updateKeepScreenOn() {
+    final bool on = widget.settings.prefs.keepScreenOn && _workflowActive;
+    if (on == _screenKeptOn) return;
+    _screenKeptOn = on;
+    widget.device.setKeepScreenOn(on);
   }
 
   void _onSettingsChanged() {
@@ -56,6 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _workflow.settings = s;
     if (changed) _workflow.reset();
+    _updateKeepScreenOn();
     if (mounted) setState(() {});
   }
 
@@ -94,38 +120,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openSettings() => Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => SettingsScreen(store: widget.settings, repo: _repo),
+      builder: (_) => SettingsScreen(
+        store: widget.settings,
+        repo: _repo,
+        auth: widget.auth,
+        workflowActive: _workflowActive,
+        device: widget.device,
+      ),
     ),
   );
-
-  Future<void> _confirmLogout() async {
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Log out?"),
-        content: const Text(
-          "You will need to enter your password to log in again.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("CANCEL"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("LOG OUT"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) await widget.auth.logout();
-  }
 
   @override
   Widget build(BuildContext context) {
     final ConnectionInfo? info = widget.auth.info;
-    final bool configured = widget.settings.settings.isComplete;
+    // The workflow is available (RESET and progress shown) only when
+    // locations are set and the user has the permissions it needs
+    final bool configured =
+        widget.settings.settings.isComplete &&
+        (info?.roles.missing.isEmpty ?? true);
 
     return ListenableBuilder(
       listenable: _workflow,
@@ -156,26 +168,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: const Text("RESET"),
                   ),
                 ),
-              PopupMenuButton<String>(
-                iconSize: 28,
-                onSelected: (v) =>
-                    v == "settings" ? _openSettings() : _confirmLogout(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: "settings",
-                    child: ListTile(
-                      leading: Icon(Icons.settings),
-                      title: Text("Locations"),
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: "logout",
-                    child: ListTile(
-                      leading: Icon(Icons.logout),
-                      title: Text("Log out"),
-                    ),
-                  ),
-                ],
+              IconButton(
+                key: const Key("open-settings"),
+                tooltip: "Settings",
+                iconSize: 30,
+                icon: const Icon(Icons.settings),
+                onPressed: _openSettings,
               ),
             ],
           ),
@@ -196,6 +194,47 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _body() {
     if (!_settingsLoaded) return const StepBusy(message: "Loading...");
+
+    final List<String> missing = widget.auth.info?.roles.missing ?? const [];
+
+    if (missing.isNotEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          StatusPanel(
+            kind: StatusKind.error,
+            large: true,
+            title: "PERMISSION REQUIRED",
+            message:
+                "Your InvenTree account (${widget.auth.info!.username}) is missing "
+                "permissions needed to load reels:",
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final m in missing)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      "\u2022 $m",
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Ask an InvenTree administrator to add these to your account "
+                  "(Admin > Users / Groups), then log in again.",
+                  style: TextStyle(fontSize: 17, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     if (!widget.settings.settings.isComplete) {
       return Padding(
@@ -235,12 +274,15 @@ class _HomeScreenState extends State<HomeScreen> {
         server: server,
       ),
       WorkflowStep.load => LoadStep(workflow: _workflow),
-      WorkflowStep.done => DoneStep(workflow: _workflow),
+      WorkflowStep.done => DoneStep(
+        workflow: _workflow,
+        autoReturn: widget.settings.prefs.autoReturn,
+      ),
     };
   }
 }
 
-/// Compact strip at the top of the screen showing who is logged in, and where.
+/// Compact strip at the top of the screen showing who is logged in.
 class LoginStatusBanner extends StatelessWidget {
   const LoginStatusBanner({super.key, required this.info});
 
@@ -248,35 +290,31 @@ class LoginStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String version = info.serverVersion.isEmpty
-        ? ""
-        : "  ·  InvenTree ${info.serverVersion}";
-
-    return Container(
-      color: StatusColors.ok,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, color: Colors.white, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: "Logged in as ${info.username}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  TextSpan(text: "  ·  ${info.serverLabel}$version"),
-                ],
+    return Semantics(
+      label: "Logged in as ${info.username}",
+      excludeSemantics: true,
+      child: Container(
+        color: StatusColors.ok,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Row(
+          children: [
+            const Icon(Icons.person, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                info.username,
+                key: const Key("login-status"),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              key: const Key("login-status"),
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

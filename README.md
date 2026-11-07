@@ -10,6 +10,13 @@ Android companion app for InvenTree: verify exact MPNs when loading reels onto a
 
 Progress is shown at the bottom of the screen, and RESET is always available.
 
+Other features:
+
+- **Permissions:** checked at login (`part.view`, `stock.view`, `stock.change`, `stock_location.view`). Missing roles block the workflow, and the screen lists which roles are needed.
+- **Settings:** locations, return to step 1 automatically 5 seconds after a transfer, keep the screen on during a reel swap, connection details, trusted certificate, log out, the log, and versions.
+- **Self-signed certificates:** the user can choose to trust a server's certificate after checking its SHA-256 fingerprint. The trust is pinned to that exact certificate for that server only, so any other certificate prompts again (shown as CHANGED).
+- **Log:** an in-memory log since the app started (Settings > View log). It can be filtered and copied, is discarded when the app closes, and never contains passwords, cookies or tokens.
+
 ## Setup
 
 Flutter is pinned with [fvm](https://fvm.app) (`.fvmrc` → 3.41.6). Prefix all Flutter commands with `fvm`:

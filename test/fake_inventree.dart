@@ -6,18 +6,23 @@ import "fake_inventory.dart";
 /// A minimal fake InvenTree server, implementing just enough of the REST and
 /// allauth headless APIs to exercise the login flow. Runs on localhost.
 class FakeInvenTree {
-  FakeInvenTree._(this._server);
+  FakeInvenTree._(this._server, {this.secure = false});
 
-  static Future<FakeInvenTree> start() async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = FakeInvenTree._(server);
+  final bool secure;
+
+  /// Start on a free port. With [tls], serve HTTPS using that certificate.
+  static Future<FakeInvenTree> start({SecurityContext? tls}) async {
+    final server = tls == null
+        ? await HttpServer.bind(InternetAddress.loopbackIPv4, 0)
+        : await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, tls);
+    final fake = FakeInvenTree._(server, secure: tls != null);
     server.listen(fake._handle);
     return fake;
   }
 
   final HttpServer _server;
 
-  String get url => "http://127.0.0.1:${_server.port}/";
+  String get url => "${secure ? "https" : "http"}://127.0.0.1:${_server.port}/";
 
   // Accounts: username -> password
   final Map<String, String> users = {"reader": "secret"};
@@ -26,6 +31,13 @@ class FakeInvenTree {
   final Set<String> mfaUsers = {};
 
   int apiVersion = 571;
+
+  // Roles returned by user/me/roles/ (default: everything the app needs)
+  Map<String, List<String>> roles = {
+    "part": ["view"],
+    "stock": ["view", "change"],
+    "stock_location": ["view"],
+  };
 
   final FakeInventory inventory = FakeInventory();
 
@@ -213,6 +225,20 @@ class FakeInvenTree {
             "username": sessionUser,
             "first_name": "Test",
             "last_name": "User",
+          });
+        } else {
+          send(401, {
+            "detail": "Authentication credentials were not provided.",
+          });
+        }
+
+      case "GET /api/user/me/roles/":
+        if (authenticated) {
+          send(200, {
+            "username": sessionUser,
+            "roles": roles,
+            "is_staff": false,
+            "is_superuser": false,
           });
         } else {
           send(401, {

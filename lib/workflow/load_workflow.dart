@@ -1,5 +1,6 @@
 import "package:flutter/foundation.dart";
 
+import "package:inventree_smt/core/app_log.dart";
 import "package:inventree_smt/core/settings_store.dart";
 import "package:inventree_smt/inventree/inventree_repository.dart";
 import "package:inventree_smt/inventree/models.dart";
@@ -165,6 +166,7 @@ class LoadWorkflow extends ChangeNotifier {
         final String message = e is ApiException
             ? e.message
             : "Unexpected error: $e";
+        appLog.error("workflow", message);
         switch (_step) {
           case WorkflowStep.scanPart:
             _partScan = ScanFailed(message);
@@ -191,9 +193,11 @@ class LoadWorkflow extends ChangeNotifier {
 
   Future<void> scanPart(String barcode) =>
       _run("Looking up barcode...", (stale) async {
+        appLog.info("workflow", "Step 1: scanned ${logSnippet(barcode)}");
         final ScanOutcome outcome = await repo.resolveBarcode(barcode);
         if (stale()) return;
 
+        _logOutcome("Step 1", outcome);
         _partScan = outcome;
         _expected = outcome is ScanResolved ? outcome.result : null;
       });
@@ -216,6 +220,10 @@ class LoadWorkflow extends ChangeNotifier {
   /// The user has checked the part against the SMT machine - move to step 2.
   Future<void> confirmPart() async {
     if (_busy || _step != WorkflowStep.scanPart || _expected == null) return;
+    appLog.info(
+      "workflow",
+      "Step 1: confirmed MPN ${_expected!.manufacturerPart.mpn} (${_expected!.part.displayName})",
+    );
     _step = WorkflowStep.selectStock;
     notifyListeners();
     await loadCandidates();
@@ -241,6 +249,20 @@ class LoadWorkflow extends ChangeNotifier {
       if (stale()) return;
 
       _candidates = list;
+      appLog.info(
+        "workflow",
+        "Step 2: ${list.where((c) => c.kind == CandidateKind.exact).length} exact, "
+            "${list.where((c) => c.kind == CandidateKind.alternate).length} alternate, "
+            "${list.where((c) => c.kind == CandidateKind.dataError).length} needing a data fix "
+            "in ${source.pathstring}",
+      );
+      for (final c in list.where((c) => c.kind == CandidateKind.dataError)) {
+        appLog.error(
+          "data",
+          "Reel #${c.item.pk} in ${c.item.locationPath} has no MPN link "
+              "(${c.item.supplierPartId == null ? "no supplier part" : "supplier part #${c.item.supplierPartId} has no manufacturer part"})",
+        );
+      }
 
       // Keep the selection if the reel is still listed
       if (_selected != null) {
@@ -251,6 +273,7 @@ class LoadWorkflow extends ChangeNotifier {
       }
     } on ApiException catch (e) {
       if (stale()) return;
+      appLog.error("workflow", "Step 2: could not load stock - ${e.message}");
       _stockError = e.message;
     }
   });
@@ -274,6 +297,7 @@ class LoadWorkflow extends ChangeNotifier {
   }
 
   void _verifyFail(String message, [DataIssue? issue]) {
+    appLog.warning("workflow", "Step 2: not verified - $message");
     _verified = false;
     _verifyIsError = true;
     _verifyMessage = message;
@@ -281,10 +305,36 @@ class LoadWorkflow extends ChangeNotifier {
   }
 
   void _verifyOk(String message) {
+    appLog.info("workflow", "Step 2: $message");
     _verified = true;
     _verifyIsError = false;
     _verifyMessage = message;
     _verifyIssue = null;
+  }
+
+  void _logOutcome(String step, ScanOutcome outcome) {
+    switch (outcome) {
+      case ScanResolved(:final result):
+        appLog.info(
+          "workflow",
+          "$step: resolved to MPN ${result.manufacturerPart.mpn} "
+              "(${result.part.displayName}${result.stockItem == null ? "" : ", reel #${result.stockItem!.pk}"})",
+        );
+      case ScanAmbiguous(:final options):
+        appLog.warning(
+          "workflow",
+          "$step: MPN ${options.first.manufacturerPart.mpn} matches ${options.length} manufacturer parts",
+        );
+      case ScanDataError(:final issue):
+        appLog.error(
+          "data",
+          "${issue.title}: ${issue.detail} [${issue.webPath}]",
+        );
+      case ScanNotFound(:final message):
+        appLog.warning("workflow", "$step: $message");
+      case ScanFailed(:final message):
+        appLog.error("workflow", "$step: lookup failed - $message");
+    }
   }
 
   String _describe(ResolvedPart p) =>
@@ -302,8 +352,11 @@ class LoadWorkflow extends ChangeNotifier {
     final ResolvedPart? expected = _expected;
     if (_step != WorkflowStep.selectStock || expected == null) return;
 
+    appLog.info("workflow", "Step 2: scanned ${logSnippet(barcode)}");
     final ScanOutcome outcome = await repo.resolveBarcode(barcode);
     if (stale()) return;
+
+    _logOutcome("Step 2", outcome);
 
     switch (outcome) {
       case ScanFailed(:final message):
@@ -436,6 +489,11 @@ class LoadWorkflow extends ChangeNotifier {
 
     _quantity = selected.item.quantity;
     _transferError = null;
+    appLog.info(
+      "workflow",
+      "Step 2: confirmed reel #${selected.item.pk} (MPN ${selected.item.mpn}"
+          "${isAlternate ? ", ALTERNATE confirmed by operator" : ""})",
+    );
     _step = WorkflowStep.load;
     notifyListeners();
   }
@@ -451,6 +509,10 @@ class LoadWorkflow extends ChangeNotifier {
     if (validateQuantity("$quantity", selected.item.quantity) != null) return;
 
     _quantity = quantity;
+    appLog.info(
+      "workflow",
+      "Step 3: quantity set to ${formatQuantity(quantity)}",
+    );
     notifyListeners();
   }
 
@@ -496,7 +558,10 @@ class LoadWorkflow extends ChangeNotifier {
     try {
       before = await repo.getStockItem(listed.pk);
     } on ApiException catch (e) {
-      if (!stale()) _transferError = e.message;
+      if (!stale()) {
+        appLog.error("workflow", "Step 3: ${e.message}");
+        _transferError = e.message;
+      }
       return;
     }
 
@@ -504,6 +569,7 @@ class LoadWorkflow extends ChangeNotifier {
 
     final String? changed = _changedSinceListed(listed, before, q);
     if (changed != null) {
+      appLog.warning("workflow", "Step 3: transfer not made - $changed");
       _transferError = changed;
       return;
     }
@@ -520,13 +586,20 @@ class LoadWorkflow extends ChangeNotifier {
       // came back - check before reporting a failure, so it is not repeated.
       if (stale()) return;
       if (!await _transferHappened(listed.pk, before, q)) {
-        if (!stale()) _transferError = e.message;
+        if (!stale()) {
+          appLog.error("workflow", "Step 3: ${e.message}");
+          _transferError = e.message;
+        }
         return;
       }
     }
 
     if (stale()) return;
 
+    appLog.info(
+      "workflow",
+      "Step 3: transferred ${formatQuantity(q)} of reel #${listed.pk} into ${machine.pathstring}",
+    );
     _transferredQuantity = q;
     _step = WorkflowStep.done;
   });
@@ -570,6 +643,7 @@ class LoadWorkflow extends ChangeNotifier {
 
   /// Abandon the current swap and return to step 1. Safe at any time.
   void reset() {
+    if (canReset) appLog.info("workflow", "Reset (was at ${_step.name})");
     _generation++;
 
     _step = WorkflowStep.scanPart;

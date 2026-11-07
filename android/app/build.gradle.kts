@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "au.com.currawongeng.inventree_smt"
+    namespace = "org.inventree.inventree_smt"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "au.com.currawongeng.inventree_smt"
+        applicationId = "org.inventree.inventree_smt"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

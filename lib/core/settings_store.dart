@@ -81,26 +81,67 @@ class MemorySettingsBackend implements SettingsBackend {
   Future<void> write(String? data) async => this.data = data;
 }
 
+/// App behaviour preferences (the same for any server).
+class AppPreferences {
+  const AppPreferences({this.autoReturn = true, this.keepScreenOn = true});
+
+  factory AppPreferences.fromJson(Map<String, dynamic> json) => AppPreferences(
+    autoReturn: json["autoReturn"] != false,
+    keepScreenOn: json["keepScreenOn"] != false,
+  );
+
+  /// After a transfer, return to step 1 automatically after [autoReturnSeconds].
+  final bool autoReturn;
+
+  /// Keep the screen on while a reel swap is in progress.
+  final bool keepScreenOn;
+
+  static const int autoReturnSeconds = 5;
+
+  AppPreferences copyWith({bool? autoReturn, bool? keepScreenOn}) =>
+      AppPreferences(
+        autoReturn: autoReturn ?? this.autoReturn,
+        keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+      );
+
+  Map<String, dynamic> toJson() => {
+    "autoReturn": autoReturn,
+    "keepScreenOn": keepScreenOn,
+  };
+}
+
 class SettingsStore extends ChangeNotifier {
   SettingsStore(this._backend);
 
   final SettingsBackend _backend;
 
   WorkflowSettings _settings = const WorkflowSettings();
+
+  /// Locations - for the current server only.
   WorkflowSettings get settings => _settings;
+
+  AppPreferences _prefs = const AppPreferences();
+  AppPreferences get prefs => _prefs;
 
   String _origin = "";
 
-  /// Load the settings stored for [server] (settings for another server are ignored).
+  /// Load the settings. Locations stored for a different server are ignored.
   Future<void> load(String server) async {
     _origin = serverOrigin(server);
     _settings = const WorkflowSettings();
+    _prefs = const AppPreferences();
 
     try {
       final String? raw = await _backend.read();
       if (raw != null) {
         final Map<String, dynamic> data =
             json.decode(raw) as Map<String, dynamic>;
+
+        if (data["prefs"] is Map<String, dynamic>) {
+          _prefs = AppPreferences.fromJson(
+            data["prefs"] as Map<String, dynamic>,
+          );
+        }
 
         if (data["origin"] == _origin) {
           StockLocationInfo? loc(String key) =>
@@ -115,21 +156,31 @@ class SettingsStore extends ChangeNotifier {
       }
     } catch (_) {
       _settings = const WorkflowSettings();
+      _prefs = const AppPreferences();
     }
 
     notifyListeners();
   }
 
+  Future<void> _write() => _backend.write(
+    json.encode({
+      "origin": _origin,
+      "prefs": _prefs.toJson(),
+      if (_settings.source != null) "source": _settings.source!.toJson(),
+      if (_settings.machine != null) "machine": _settings.machine!.toJson(),
+    }),
+  );
+
+  /// Save the locations.
   Future<void> save(WorkflowSettings settings) async {
     _settings = settings;
     notifyListeners();
+    await _write();
+  }
 
-    await _backend.write(
-      json.encode({
-        "origin": _origin,
-        if (settings.source != null) "source": settings.source!.toJson(),
-        if (settings.machine != null) "machine": settings.machine!.toJson(),
-      }),
-    );
+  Future<void> savePrefs(AppPreferences prefs) async {
+    _prefs = prefs;
+    notifyListeners();
+    await _write();
   }
 }

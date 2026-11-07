@@ -86,13 +86,11 @@ void main() {
       ),
     );
 
-    expect(
-      find.text(
-        "Logged in as allaccess  ·  localhost:8000  ·  InvenTree 1.8.0 dev",
-        findRichText: true,
-      ),
-      findsOneWidget,
-    );
+    expect(find.text("allaccess"), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsNothing);
+    expect(find.textContaining("localhost"), findsNothing);
+    expect(find.bySemanticsLabel("Logged in as allaccess"), findsOneWidget);
   });
 
   group("Workflow screens:", () {

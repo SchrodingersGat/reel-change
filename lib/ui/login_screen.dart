@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 
 import "package:inventree_smt/auth/auth_service.dart";
 import "package:inventree_smt/core/api_client.dart";
+import "package:inventree_smt/core/certificates.dart";
 import "package:inventree_smt/ui/theme.dart";
 
 /// Login form (server, username, password), plus the MFA code step.
@@ -45,12 +46,56 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     FocusScope.of(context).unfocus();
 
-    final String password = _password.text;
+    await auth.login(_server.text, _username.text, _password.text);
 
-    // The password is only held for the duration of the request
-    _password.clear();
+    // The password is only kept while the user decides whether to trust the
+    // server's certificate (so they do not have to type it again)
+    if (auth.pendingCertificate == null) _password.clear();
+  }
 
-    await auth.login(_server.text, _username.text, password);
+  Future<void> _trustCertificate() async {
+    final CertificateInfo? cert = auth.pendingCertificate;
+    if (cert == null) return;
+
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(
+          Icons.gpp_maybe,
+          color: StatusColors.warning,
+          size: 48,
+        ),
+        title: const Text("Trust this certificate?"),
+        content: Text(
+          "The app will accept this exact certificate for ${cert.host}:${cert.port}. "
+          "You will be asked again if the server presents any other certificate.",
+          style: const TextStyle(fontSize: 17),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("CANCEL"),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: StatusColors.warning,
+              minimumSize: const Size(120, 48),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("TRUST"),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !await auth.trustPendingCertificate()) return;
+
+    // Carry on with what was interrupted
+    if (_password.text.isNotEmpty) {
+      await _login();
+    } else {
+      await auth.retry();
+    }
   }
 
   Future<void> _submitCode() async {
@@ -75,14 +120,27 @@ class _LoginScreenState extends State<LoginScreen> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 24),
-            if (auth.message.isNotEmpty) ...[
+            if (auth.pendingCertificate != null && !mfa) ...[
+              _CertificatePanel(
+                certificate: auth.pendingCertificate!,
+                changed: auth.certificateChanged,
+                message: auth.message,
+                busy: auth.busy,
+                onTrust: _trustCertificate,
+                onReject: () {
+                  _password.clear();
+                  auth.rejectPendingCertificate();
+                },
+              ),
+              const SizedBox(height: 24),
+            ] else if (auth.message.isNotEmpty) ...[
               _MessageBanner(
                 message: auth.message,
                 isError: auth.messageIsError,
               ),
               const SizedBox(height: 16),
             ],
-            if (auth.canRetry && !mfa) ...[
+            if (auth.canRetry && !mfa && auth.pendingCertificate == null) ...[
               OutlinedButton.icon(
                 onPressed: auth.busy ? null : auth.retry,
                 icon: const Icon(Icons.refresh),
@@ -257,6 +315,145 @@ class _MessageBanner extends StatelessWidget {
                 color: color,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An untrusted (or changed) server certificate, with the details the user
+/// needs to decide whether to trust it.
+class _CertificatePanel extends StatelessWidget {
+  const _CertificatePanel({
+    required this.certificate,
+    required this.changed,
+    required this.message,
+    required this.busy,
+    required this.onTrust,
+    required this.onReject,
+  });
+
+  final CertificateInfo certificate;
+  final bool changed;
+  final String message;
+  final bool busy;
+  final VoidCallback onTrust;
+  final VoidCallback onReject;
+
+  String _date(DateTime? d) => d == null
+      ? "?"
+      : "${d.year}-${d.month.toString().padLeft(2, "0")}-${d.day.toString().padLeft(2, "0")}";
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = changed ? StatusColors.error : StatusColors.warning;
+
+    Widget row(
+      String label,
+      String value, {
+      bool mono = false,
+      Color? valueColor,
+    }) => Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+          ),
+          SelectableText(
+            value,
+            style: TextStyle(
+              fontSize: mono ? 14 : 16,
+              fontFamily: mono ? "monospace" : null,
+              color: valueColor ?? Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      key: const Key("certificate-panel"),
+      decoration: BoxDecoration(
+        border: Border.all(color: color, width: 3),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: color,
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  changed ? Icons.gpp_bad : Icons.gpp_maybe,
+                  color: Colors.white,
+                  size: 40,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    changed ? "CERTIFICATE CHANGED" : "UNTRUSTED CERTIFICATE",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(fontSize: 17, color: Colors.black87),
+                ),
+                row("Server", "${certificate.host}:${certificate.port}"),
+                row("Issued to", certificate.subject),
+                row("Issued by", certificate.issuer),
+                row(
+                  "Valid",
+                  "${_date(certificate.validFrom)} to ${_date(certificate.validTo)}"
+                      "${certificate.isExpired ? "  (EXPIRED)" : ""}",
+                  valueColor: certificate.isExpired ? StatusColors.error : null,
+                ),
+                row("SHA-256 fingerprint", certificate.fingerprint, mono: true),
+                const SizedBox(height: 12),
+                const Text(
+                  "Only trust this certificate if your InvenTree server is known to use a "
+                  "self-signed certificate, and the fingerprint matches the one from your "
+                  "administrator.",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: busy ? null : onReject,
+                  child: const Text("DON'T TRUST"),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const Key("trust-certificate"),
+                  style: OutlinedButton.styleFrom(foregroundColor: color),
+                  onPressed: busy ? null : onTrust,
+                  icon: const Icon(Icons.verified_user),
+                  label: const Text("TRUST THIS CERTIFICATE"),
+                ),
+              ],
             ),
           ),
         ],
