@@ -126,9 +126,24 @@ class FakeInventory {
     },
   };
 
+  // Company names (manufacturers 1-5, suppliers 10-11)
+  final Map<int, String> companies = {
+    1: "Yageo",
+    2: "Panasonic",
+    3: "Murata",
+    4: "Maker A",
+    5: "Maker B",
+    10: "DigiKey",
+    11: "Mouser",
+  };
+
+  // Set to make the supplier part list fail (names are optional)
+  bool failSupplierPartList = false;
+
   final Map<int, Map<String, dynamic>> supplierParts = {
     200: {
       "pk": 200,
+      "supplier": 10,
       "part": 10,
       "SKU": "SKU-A",
       "manufacturer_part": 100,
@@ -136,6 +151,7 @@ class FakeInventory {
     },
     201: {
       "pk": 201,
+      "supplier": 2,
       "part": 10,
       "SKU": "SKU-B",
       "manufacturer_part": 101,
@@ -143,6 +159,7 @@ class FakeInventory {
     },
     202: {
       "pk": 202,
+      "supplier": 10,
       "part": 10,
       "SKU": "SKU-NOMP",
       "manufacturer_part": null,
@@ -150,6 +167,7 @@ class FakeInventory {
     },
     203: {
       "pk": 203,
+      "supplier": 11,
       "part": 20,
       "SKU": "SKU-C",
       "manufacturer_part": 102,
@@ -373,6 +391,28 @@ class FakeInventory {
       final rows = manufacturerParts.values
           .where((mp) => q["MPN"] == null || mp["MPN"] == q["MPN"])
           .map((mp) => {...mp, "part_detail": parts[mp["part"]]})
+          .toList();
+      return (200, _page(rows, q));
+    }
+
+    if (path == "/api/company/part/") {
+      if (failSupplierPartList) return (500, {"detail": "Server error"});
+      final rows = supplierParts.values
+          .where((sp) => q["part"] == null || "${sp["part"]}" == q["part"])
+          .map((sp) {
+            final mp = sp["manufacturer_part"] == null
+                ? null
+                : manufacturerParts[sp["manufacturer_part"]];
+            return {
+              ...sp,
+              if (q["supplier_detail"] == "true")
+                "supplier_detail": {"name": companies[sp["supplier"]]},
+              if (q["manufacturer_detail"] == "true")
+                "manufacturer_detail": mp == null
+                    ? null
+                    : {"name": companies[mp["manufacturer"]]},
+            };
+          })
           .toList();
       return (200, _page(rows, q));
     }

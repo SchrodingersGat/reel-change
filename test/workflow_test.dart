@@ -184,6 +184,62 @@ void main() {
       },
     );
 
+    test("Candidates carry manufacturer and supplier names", () async {
+      await toStep2();
+
+      StockItemInfo item(int pk) =>
+          wf.candidates.firstWhere((c) => c.item.pk == pk).item;
+
+      // Bought from a distributor
+      expect(item(1000).manufacturerName, "Yageo");
+      expect(item(1000).supplierName, "DigiKey");
+      expect(item(1000).distinctSupplierName, "DigiKey");
+
+      // Bought direct from the manufacturer - supplier not repeated
+      expect(item(1002).manufacturerName, "Panasonic");
+      expect(item(1002).supplierName, "Panasonic");
+      expect(item(1002).distinctSupplierName, "");
+
+      // No manufacturer part, but the supplier is known
+      expect(item(1004).manufacturerName, "");
+      expect(item(1004).supplierName, "DigiKey");
+
+      // No supplier part at all
+      expect(item(1003).manufacturerName, "");
+      expect(item(1003).supplierName, "");
+
+      // One extra request for all the names
+      expect(
+        server.requests.where((r) => r == "GET /api/company/part/").length,
+        1,
+      );
+    });
+
+    test("Candidates are still listed if the names cannot be loaded", () async {
+      server.inventory.failSupplierPartList = true;
+      await toStep2();
+
+      expect(wf.stockError, isNull);
+      expect(wf.exactCandidates.map((c) => c.item.pk), [1000, 1001]);
+      expect(wf.exactCandidates.first.item.manufacturerName, "");
+    });
+
+    test("Supplier is only shown when different from the manufacturer", () {
+      StockItemInfo item(String mfr, String supplier) => StockItemInfo(
+        pk: 1,
+        partId: 1,
+        quantity: 1,
+        manufacturerName: mfr,
+        supplierName: supplier,
+      );
+
+      expect(item("Molex", "DigiKey").distinctSupplierName, "DigiKey");
+      expect(item("Molex", "Molex").distinctSupplierName, "");
+      expect(item("Molex", " molex ").distinctSupplierName, "");
+      expect(item("Molex", "").distinctSupplierName, "");
+      expect(item("", "DigiKey").distinctSupplierName, "DigiKey");
+    });
+
     test("Data error reels cannot be selected", () async {
       await toStep2();
       wf.select(wf.dataErrorCandidates.first);

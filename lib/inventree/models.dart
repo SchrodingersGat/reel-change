@@ -127,6 +127,8 @@ class StockItemInfo {
     this.mpn = "",
     this.sku = "",
     this.inStock = true,
+    this.manufacturerName = "",
+    this.supplierName = "",
   });
 
   factory StockItemInfo.fromJson(Map<String, dynamic> json) {
@@ -170,6 +172,40 @@ class StockItemInfo {
   final String mpn;
   final String sku;
   final bool inStock;
+
+  /// Manufacturer of the reel's MPN ("" if not known).
+  final String manufacturerName;
+
+  /// Supplier the reel was bought from ("" if not known).
+  final String supplierName;
+
+  /// The supplier, if known and not the same company as the manufacturer
+  /// (e.g. bought direct from the manufacturer).
+  String get distinctSupplierName =>
+      supplierName.isNotEmpty &&
+          supplierName.trim().toLowerCase() !=
+              manufacturerName.trim().toLowerCase()
+      ? supplierName
+      : "";
+
+  StockItemInfo withNames({String? manufacturer, String? supplier}) =>
+      StockItemInfo(
+        pk: pk,
+        partId: partId,
+        quantity: quantity,
+        part: part,
+        serial: serial,
+        batch: batch,
+        locationId: locationId,
+        locationPath: locationPath,
+        supplierPartId: supplierPartId,
+        manufacturerPartId: manufacturerPartId,
+        mpn: mpn,
+        sku: sku,
+        inStock: inStock,
+        manufacturerName: manufacturer ?? manufacturerName,
+        supplierName: supplier ?? supplierName,
+      );
 
   bool get hasMpnLink => manufacturerPartId != null;
 

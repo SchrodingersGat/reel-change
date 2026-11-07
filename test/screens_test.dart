@@ -128,6 +128,54 @@ void main() {
     await finish(tester);
   });
 
+  testWidgets("Reel list shows manufacturer, and supplier when different", (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
+    await connect(tester);
+    await pumpHome(tester);
+    await typeBarcode(tester, "INV-SI1007");
+    await tester.tap(find.text("CONFIRM PART"));
+    await settle(tester);
+
+    String text(String key) => tester.widget<Text>(find.byKey(Key(key))).data!;
+
+    // Distributor: manufacturer with the MPN, supplier with the SKU
+    expect(text("candidate-1000-mpn"), "MPN RC0402-10K  ·  Yageo");
+    expect(text("candidate-1000-supplier"), "Supplier DigiKey  ·  SKU SKU-A");
+
+    // Bought direct from the manufacturer: supplier not repeated
+    await tester.scrollUntilVisible(
+      find.byKey(const Key("candidate-1002-supplier")),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(text("candidate-1002-mpn"), "MPN ERJ-2RKF1002X  ·  Panasonic");
+    expect(text("candidate-1002-supplier"), "SKU SKU-B");
+
+    // Needs a data fix: supplier named in the reason
+    await tester.scrollUntilVisible(
+      find.textContaining("SKU-NOMP (DigiKey)"),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.textContaining("SKU-NOMP (DigiKey)"), findsOneWidget);
+    await finish(tester);
+  });
+
   testWidgets("Every step has the same action heading at the top left", (
     tester,
   ) async {

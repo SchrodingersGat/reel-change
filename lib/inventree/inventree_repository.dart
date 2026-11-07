@@ -1,3 +1,4 @@
+import "package:inventree_smt/core/app_log.dart";
 import "package:inventree_smt/auth/allauth_client.dart";
 import "package:inventree_smt/core/api_client.dart";
 import "package:inventree_smt/inventree/models.dart";
@@ -453,12 +454,63 @@ class InvenTreeRepository {
       candidates.add(StockCandidate(item, kind));
     }
 
+    // Manufacturer / supplier names, for display. The stock list does not
+    // include them, but every candidate is the same part, so one request
+    // for that part's supplier parts covers them all.
+    final Map<int, (String, String)> names = await _supplierPartNames(partId);
+
+    for (int i = 0; i < candidates.length; i++) {
+      final StockCandidate c = candidates[i];
+      final (String, String)? n = names[c.item.supplierPartId];
+      if (n != null) {
+        candidates[i] = StockCandidate(
+          c.item.withNames(manufacturer: n.$1, supplier: n.$2),
+          c.kind,
+        );
+      }
+    }
+
     candidates.sort((a, b) {
       final int k = a.kind.index.compareTo(b.kind.index);
       return k != 0 ? k : a.item.pk.compareTo(b.item.pk);
     });
 
     return candidates;
+  }
+
+  /// Supplier part pk -> (manufacturer name, supplier name) for a part.
+  /// Names are for display only: if they cannot be loaded, the list is shown
+  /// without them.
+  Future<Map<int, (String, String)>> _supplierPartNames(int partId) async {
+    try {
+      final rows = await _getList(
+        "company/part/",
+        "load supplier parts",
+        query: {
+          "part": "$partId",
+          "supplier_detail": "true",
+          "manufacturer_detail": "true",
+        },
+      );
+
+      String name(dynamic detail) =>
+          detail is Map ? (detail["name"] ?? "").toString() : "";
+
+      return {
+        for (final r in rows)
+          if (r["pk"] is int)
+            r["pk"] as int: (
+              name(r["manufacturer_detail"]),
+              name(r["supplier_detail"]),
+            ),
+      };
+    } on ApiException catch (e) {
+      appLog.warning(
+        "workflow",
+        "Could not load manufacturer / supplier names: ${e.message}",
+      );
+      return {};
+    }
   }
 
   /// Move [quantity] of a stock item into [location].

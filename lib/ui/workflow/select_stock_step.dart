@@ -91,12 +91,11 @@ class SelectStockStep extends StatelessWidget {
   /// The action the user needs to take next.
   (String, String) _heading() {
     final StockCandidate? selected = workflow.selected;
-    final String source = workflow.source.pathstring;
 
     if (selected == null) {
       return (
         "Select Replacement Reel",
-        "Pick the reel you have from $source, or scan its label.",
+        "Pick the reel from the list below, or scan a label directly.",
       );
     }
     if (!workflow.selectionVerified) {
@@ -375,8 +374,14 @@ class _CandidateTile extends StatelessWidget {
                       "Qty ${formatQuantity(item.quantity)}  ·  ${item.locationPath}",
                       style: const TextStyle(fontSize: 16),
                     ),
+                    // MPN with its manufacturer
                     Text(
-                      "MPN ${item.mpn}${item.sku.isEmpty ? "" : "  ·  SKU ${item.sku}"}",
+                      [
+                        "MPN ${item.mpn}",
+                        if (item.manufacturerName.isNotEmpty)
+                          item.manufacturerName,
+                      ].join("  ·  "),
+                      key: Key("candidate-${item.pk}-mpn"),
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: alternate
@@ -385,6 +390,21 @@ class _CandidateTile extends StatelessWidget {
                         color: alternate ? StatusColors.warning : null,
                       ),
                     ),
+                    // Supplier (if different from the manufacturer) with its SKU
+                    if (item.distinctSupplierName.isNotEmpty ||
+                        item.sku.isNotEmpty)
+                      Text(
+                        [
+                          if (item.distinctSupplierName.isNotEmpty)
+                            "Supplier ${item.distinctSupplierName}",
+                          if (item.sku.isNotEmpty) "SKU ${item.sku}",
+                        ].join("  ·  "),
+                        key: Key("candidate-${item.pk}-supplier"),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -409,7 +429,9 @@ class _BrokenTile extends StatelessWidget {
     final StockItemInfo item = candidate.item;
     final String reason = item.supplierPartId == null
         ? "No supplier part - MPN unknown"
-        : "Supplier part ${item.sku} has no manufacturer part (MPN)";
+        : "Supplier part ${item.sku}"
+              "${item.supplierName.isEmpty ? "" : " (${item.supplierName})"}"
+              " has no manufacturer part (MPN)";
     final String path = item.supplierPartId == null
         ? "web/stock/item/${item.pk}"
         : "web/purchasing/supplier-part/${item.supplierPartId}";
