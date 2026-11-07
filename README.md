@@ -1,6 +1,10 @@
+<p align="center">
+  <img src="assets/images/logo.png" alt="Reel Change app icon" width="128">
+</p>
+
 # Reel Change
 
-Android companion app for InvenTree: verify exact MPNs when loading reels onto an SMT machine. See `plan.md` for the full work plan.
+Android companion app for InvenTree: verify exact MPNs when loading reels onto an SMT machine.
 
 **Status:** login / auto-login, location settings, and the three-step reel-loading workflow:
 
