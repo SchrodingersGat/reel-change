@@ -165,7 +165,7 @@ class ScanPartStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          "Scan the label on the empty reel",
+          "Scan Empty Reel",
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineSmall,
         ),

@@ -102,6 +102,31 @@ void main() {
     await tester.pump(const Duration(minutes: 1));
   }
 
+  testWidgets("A deleted location is reported on startup", (tester) async {
+    await connect(tester);
+    server.inventory.locations.remove(3);
+
+    await pumpHome(tester);
+
+    expect(find.byKey(const Key("location-problems")), findsOneWidget);
+    expect(
+      find.textContaining("\"SMT Line\" no longer exists"),
+      findsOneWidget,
+    );
+    expect(find.text("CONFIGURE LOCATIONS"), findsOneWidget);
+    expect(find.text("SCAN PART"), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets("Valid locations go straight to the workflow", (tester) async {
+    await connect(tester);
+    await pumpHome(tester);
+
+    expect(find.byKey(const Key("location-problems")), findsNothing);
+    expect(find.text("SCAN PART"), findsOneWidget);
+    await finish(tester);
+  });
+
   testWidgets("Missing permissions block the workflow", (tester) async {
     await tester.runAsync(() async {
       server = await FakeInvenTree.start();
@@ -128,6 +153,7 @@ void main() {
     expect(find.byKey(const Key("workflow-progress")), findsNothing);
     // Settings (e.g. to log out) are still available
     expect(find.byKey(const Key("open-settings")), findsOneWidget);
+    await finish(tester);
   });
 
   testWidgets("Screen is kept on only while a swap is active", (tester) async {

@@ -83,8 +83,13 @@ class StockCandidate {
 }
 
 class ApiException implements Exception {
-  const ApiException(this.message);
+  const ApiException(this.message, {this.statusCode});
   final String message;
+
+  /// HTTP status, if the server responded (null for network errors).
+  final int? statusCode;
+
+  bool get isNotFound => statusCode == 404;
   @override
   String toString() => message;
 }
@@ -126,7 +131,12 @@ class InvenTreeRepository {
     Map<String, String>? query,
   }) async {
     final ApiResponse r = await api.get(endpoint, query: query);
-    if (!r.isSuccess) throw ApiException(_errorFor(r, what));
+    if (!r.isSuccess) {
+      throw ApiException(
+        _errorFor(r, what),
+        statusCode: r.isValid ? r.statusCode : null,
+      );
+    }
     return r.asMap();
   }
 

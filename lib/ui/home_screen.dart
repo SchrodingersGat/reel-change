@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "package:inventree_smt/auth/auth_service.dart";
+import "package:inventree_smt/core/app_log.dart";
 import "package:inventree_smt/core/device.dart";
 import "package:inventree_smt/core/settings_store.dart";
 import "package:inventree_smt/inventree/inventree_repository.dart";
@@ -12,6 +13,7 @@ import "package:inventree_smt/ui/workflow/scan_part_step.dart";
 import "package:inventree_smt/ui/workflow/select_stock_step.dart";
 import "package:inventree_smt/ui/workflow/widgets.dart";
 import "package:inventree_smt/workflow/load_workflow.dart";
+import "package:inventree_smt/workflow/location_check.dart";
 
 /// Main screen once logged in: hosts the reel-loading workflow, one step at a time.
 class HomeScreen extends StatefulWidget {
@@ -39,6 +41,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _settingsLoaded = false;
 
+  // Why stored locations were removed by the startup check (cleared once
+  // the locations are set up again)
+  List<String> _locationProblems = const [];
+
   // Current keep-screen-on state requested from the device
   bool _screenKeptOn = false;
 
@@ -47,9 +53,23 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _workflow.addListener(_updateKeepScreenOn);
     widget.settings.addListener(_onSettingsChanged);
-    widget.settings.load(widget.auth.api.server).whenComplete(() {
-      if (mounted) setState(() => _settingsLoaded = true);
-    });
+    _loadSettings();
+  }
+
+  /// Load the stored settings, and check the stored locations still exist
+  /// (and are still valid) on the server.
+  Future<void> _loadSettings() async {
+    try {
+      await widget.settings.load(widget.auth.api.server);
+      final LocationCheckResult result = await recheckLocations(
+        widget.settings,
+        _repo,
+      );
+      if (mounted) setState(() => _locationProblems = result.problems);
+    } catch (e) {
+      appLog.error("settings", "Could not load settings: $e");
+    }
+    if (mounted) setState(() => _settingsLoaded = true);
   }
 
   @override
@@ -81,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _workflow.settings = s;
     if (changed) _workflow.reset();
+    if (s.isComplete) _locationProblems = const [];
     _updateKeepScreenOn();
     if (mounted) setState(() {});
   }
@@ -193,7 +214,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _body() {
-    if (!_settingsLoaded) return const StepBusy(message: "Loading...");
+    if (!_settingsLoaded) {
+      return const StepBusy(message: "Checking settings...");
+    }
 
     final List<String> missing = widget.auth.info?.roles.missing ?? const [];
 
@@ -243,6 +266,30 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_locationProblems.isNotEmpty) ...[
+              StatusPanel(
+                key: const Key("location-problems"),
+                kind: StatusKind.error,
+                title: "Locations changed in InvenTree",
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final p in _locationProblems)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          "\u2022 $p",
+                          style: const TextStyle(
+                            fontSize: 17,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             const StatusPanel(
               kind: StatusKind.warning,
               large: true,
