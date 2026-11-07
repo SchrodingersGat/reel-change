@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   App logo, converted by hand from img/logo.svg (24x24 viewBox).
-  Keep in sync with the SVG: circles are written as two arcs, and SVG
-  transforms (rotate / scale about the origin) become <group> elements.
+  Keep in sync with the SVG: circles are written as two arcs (with any
+  rotate() transform pre-applied to the centre), and the SVG group's
+  translate() becomes a <group> element.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -10,62 +11,62 @@
     android:viewportWidth="24"
     android:viewportHeight="24">
 
-    <!-- Reel disc (circle path8) -->
-    <path
-        android:fillColor="#E9DDAF"
-        android:strokeColor="#E9DDAF"
-        android:strokeWidth="1"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M4.0634108,12.04016 a7.9223762,7.9223762 0 1,0 15.8447524,0 a7.9223762,7.9223762 0 1,0 -15.8447524,0 z" />
+    <!-- Group g1: translate(-0.08593265, 0.87787884) -->
+    <group
+        android:translateX="-0.08593265"
+        android:translateY="0.87787884">
 
-    <!-- Spoke (path4, rotate(60)) -->
-    <group android:rotation="60" android:pivotX="0" android:pivotY="0">
+        <!-- Reel disc (circle path8) -->
+        <path
+            android:fillColor="#E9DDAF"
+            android:strokeColor="#E9DDAF"
+            android:strokeWidth="1"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M4.1195097,11.992228 a7.9223762,7.9223762 0 1,0 15.8447524,0 a7.9223762,7.9223762 0 1,0 -15.8447524,0 z" />
+
+        <!-- Spoke (path4) -->
         <path
             android:fillColor="#F9F9F9"
             android:strokeColor="#1A1A1A"
             android:strokeWidth="0.5"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
-            android:pathData="M17.825152,-1.7021935 L19.332722,0.90927444 A5.9722919,5.9722919 0 0,0 22.31905,-4.2631976 L19.437643,-4.2646415 L19.436666,-4.26295 A3.0474992,3.0474992 0 0,1 17.825152,-1.7021935 z" />
-    </group>
+            android:pathData="M15.046128,12.104174 l3.015383,0.00014 A5.9722919,5.9722919 0 0,0 15.075183,6.9318418 l-1.441954,2.4946497 l0.000976,0.00169 a3.0474992,3.0474992 0 0,1 1.411923,2.6759905 z" />
 
-    <!-- Spoke (path5, scale(-1)) -->
-    <group android:scaleX="-1" android:scaleY="-1" android:pivotX="0" android:pivotY="0">
+        <!-- Spoke (path5) -->
         <path
             android:fillColor="#F9F9F9"
             android:strokeColor="#1A1A1A"
             android:strokeWidth="0.5"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
-            android:pathData="M-8.8378906,-6.6191406 A5.9722919,5.9722919 0 0,0 -5.8515625,-11.791016 L-8.9589844,-11.791016 A3.0474992,3.0474992 0 0,1 -10.435547,-9.3847656 L-8.8378906,-6.6191406 z" />
-    </group>
+            android:pathData="M8.9210938,17.428897 a5.9722919,5.9722919 0 0,0 5.9721392,0.000298 l-1.553711,-2.691106 a3.0474992,3.0474992 0 0,1 -2.822155,-0.07562 z" />
 
-    <!-- Spoke (path6, rotate(-60)) -->
-    <group android:rotation="-60" android:pivotX="0" android:pivotY="0">
+        <!-- Spoke (path6) -->
         <path
             android:fillColor="#F9F9F9"
             android:strokeColor="#1A1A1A"
             android:strokeWidth="0.5"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
-            android:pathData="M1.7149079,16.368745 L-1.3460227,16.367839 A3.0474992,3.0474992 0 0,1 -1.7536333,17.915743 A3.0474992,3.0474992 0 0,1 -2.7582078,18.964831 L-1.2718797,21.539227 A5.9722919,5.9722919 0 0,0 1.7149079,16.368745 z" />
+            android:pathData="M5.8927873,12.02356 l3.0609306,0.000906 A3.0474992,3.0474992 0 0,1 9.3613285,10.476562 A3.0474992,3.0474992 0 0,1 10.365903,9.4274738 L8.8795749,6.8530778 A5.9722919,5.9722919 0 0,0 5.8927873,12.02356 z" />
+
+        <!-- Rotate arrow (path2) -->
+        <path
+            android:strokeColor="#009D9D"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M7.1254848,5.250888 C-0.72074659,11.264479 6.2136542,23.547414 15.293966,19.716411 C19.193215,18.07131 21.263952,13.787253 20.127818,9.7113483 C18.99166,5.6353551 15.00268,3.0379003 10.814506,3.6475683 m2.891335,-2.6250757 l-2.982215,2.6070611 l2.696044,2.9040131" />
+
+        <!-- Hub (circle path7) -->
+        <path
+            android:fillColor="#F9F9F9"
+            android:strokeColor="#1A1A1A"
+            android:strokeWidth="0.5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M11.0892859,12 a0.91071427,0.91071427 0 1,0 1.8214285,0 a0.91071427,0.91071427 0 1,0 -1.8214285,0 z" />
     </group>
-
-    <!-- Rotate arrow (path2) -->
-    <path
-        android:strokeColor="#2D5016"
-        android:strokeWidth="1.3"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M19.883709,11.198874 C18.661695,1.8760914 5.2464972,1.7466429 4.0838302,11.047979 C3.5845601,15.042139 6.1285703,18.785144 10.026196,19.787662 C13.923906,20.790202 17.960442,18.739734 19.45,15 m0.787262,3.629981 l-0.729204,-3.696272 l-3.674175,0.839689" />
-
-    <!-- Hub (circle path7) -->
-    <path
-        android:fillColor="#F9F9F9"
-        android:strokeColor="#1A1A1A"
-        android:strokeWidth="0.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M11.08928573,12 a0.91071427,0.91071427 0 1,0 1.82142854,0 a0.91071427,0.91071427 0 1,0 -1.82142854,0 z" />
 </vector>
