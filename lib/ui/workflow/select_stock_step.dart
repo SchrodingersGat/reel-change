@@ -77,25 +77,48 @@ class SelectStockStep extends StatelessWidget {
         workflow.candidates.isEmpty &&
         workflow.stockError == null;
 
-    return Column(
-      children: [
-        ExpectedPartHeader(part: expected),
-        Expanded(
-          child: loading
-              ? StepBusy(message: workflow.busyMessage)
-              : _list(context),
-        ),
-        if (!loading) _actions(context),
-      ],
+    final (String title, String instruction) = _heading();
+
+    return StepLayout(
+      title: title,
+      instruction: instruction,
+      banner: ExpectedPartHeader(part: expected),
+      body: loading ? StepBusy(message: workflow.busyMessage) : _list(context),
+      actions: loading ? const [] : _actions(context),
     );
+  }
+
+  /// The action the user needs to take next.
+  (String, String) _heading() {
+    final StockCandidate? selected = workflow.selected;
+    final String source = workflow.source.pathstring;
+
+    if (selected == null) {
+      return (
+        "Select Replacement Reel",
+        "Pick the reel you have from $source, or scan its label.",
+      );
+    }
+    if (!workflow.selectionVerified) {
+      return (
+        "Scan Selected Reel",
+        "Scan the label on reel ${selected.item.label} to confirm it is the one you picked.",
+      );
+    }
+    if (workflow.isAlternate) {
+      return (
+        "Confirm Alternate Reel",
+        "This reel has a different MPN. Only continue if the alternate is approved.",
+      );
+    }
+    return ("Confirm Reel", "Reel ${selected.item.label} is verified.");
   }
 
   Widget _list(BuildContext context) {
     final String? error = workflow.stockError;
 
     if (error != null) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
+      return StepContent(
         children: [
           StatusPanel(
             kind: StatusKind.error,
@@ -118,8 +141,7 @@ class SelectStockStep extends StatelessWidget {
     final broken = workflow.dataErrorCandidates;
 
     if (workflow.candidates.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
+      return StepContent(
         children: [
           StatusPanel(
             kind: StatusKind.error,
@@ -140,16 +162,8 @@ class SelectStockStep extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: workflow.loadCandidates,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      child: StepContent(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(
-              "Choose a reel from ${workflow.source.pathstring}",
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
           _SectionHeader(
             kind: StatusKind.ok,
             title: "Exact MPN match (${exact.length})",
@@ -181,7 +195,7 @@ class SelectStockStep extends StatelessWidget {
     );
   }
 
-  Widget _actions(BuildContext context) {
+  List<Widget> _actions(BuildContext context) {
     final StockCandidate? selected = workflow.selected;
     final bool busy = workflow.busy;
 
@@ -260,18 +274,9 @@ class SelectStockStep extends StatelessWidget {
           onPressed: () => _scanReel(context),
         ),
       );
-      children.add(
-        Text(
-          selected == null
-              ? "Select the reel you picked up from the list, or scan its label to select it."
-              : "Scan the label on the reel to confirm it is the one selected.",
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16),
-        ),
-      );
     }
 
-    return StepActions(children: children);
+    return children;
   }
 }
 

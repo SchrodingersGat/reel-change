@@ -71,67 +71,62 @@ class _DoneStepState extends State<DoneStep> {
 
     final StockItemInfo item = workflow.selected!.item;
 
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              StatusPanel(
-                kind: StatusKind.ok,
-                large: true,
-                title: "TRANSFERRED",
-                message:
-                    "Reel ${item.label} (${formatQuantity(workflow.transferredQuantity)}"
-                    "${workflow.isPartial ? " of ${formatQuantity(item.quantity)}" : ""}) "
-                    "has been moved into ${workflow.machine.pathstring}.",
-                child: MpnText(item.mpn, color: Colors.white, size: 28),
-              ),
-              if (workflow.isAlternate) ...[
-                const SizedBox(height: 12),
-                const StatusPanel(
-                  kind: StatusKind.warning,
-                  title: "Alternate MPN recorded",
-                  message:
-                      "The alternate MPN confirmation was saved in the stock item's history.",
-                ),
-              ],
-            ],
+    return StepLayout(
+      title: "Transfer Complete",
+      instruction: "Start the next reel when the machine needs one.",
+      body: StepContent(
+        children: [
+          StatusPanel(
+            kind: StatusKind.ok,
+            large: true,
+            title: "TRANSFERRED",
+            message:
+                "Reel ${item.label} (${formatQuantity(workflow.transferredQuantity)}"
+                "${workflow.isPartial ? " of ${formatQuantity(item.quantity)}" : ""}) "
+                "has been moved into ${workflow.machine.pathstring}.",
+            child: MpnText(item.mpn, color: Colors.white, size: 28),
           ),
-        ),
-        StepActions(
-          children: [
-            if (_counting) ...[
-              Text(
-                "Returning to start in $_remaining s",
-                key: const Key("auto-return-countdown"),
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
-              ),
-              LinearProgressIndicator(
-                value: _remaining / widget.seconds,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ],
-            BigActionButton(
-              label: "START NEXT REEL",
-              icon: Icons.qr_code_scanner,
-              color: StatusColors.ok,
-              height: 96,
-              onPressed: () {
-                _stop();
-                workflow.reset();
-              },
+          if (workflow.isAlternate) ...[
+            const SizedBox(height: 12),
+            const StatusPanel(
+              kind: StatusKind.warning,
+              title: "Alternate MPN recorded",
+              message:
+                  "The alternate MPN confirmation was saved in the stock item's history.",
             ),
-            if (_counting)
-              OutlinedButton(
-                key: const Key("auto-return-stay"),
-                onPressed: () => setState(_stop),
-                child: const Text("STAY ON THIS SCREEN"),
-              ),
           ],
+        ],
+      ),
+      actions: [
+        if (_counting) ...[
+          Text(
+            "Returning to start in $_remaining s",
+            key: const Key("auto-return-countdown"),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18),
+          ),
+          LinearProgressIndicator(
+            value: _remaining / widget.seconds,
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ],
+        BigActionButton(
+          label: "START NEXT REEL",
+          icon: Icons.qr_code_scanner,
+          color: StatusColors.ok,
+          height: 96,
+          onPressed: () {
+            _stop();
+            workflow.reset();
+          },
         ),
+        if (_counting)
+          OutlinedButton(
+            key: const Key("auto-return-stay"),
+            onPressed: () => setState(_stop),
+            child: const Text("STAY ON THIS SCREEN"),
+          ),
       ],
     );
   }

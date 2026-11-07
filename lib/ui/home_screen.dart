@@ -169,6 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!didPop) _confirmReset();
         },
         child: Scaffold(
+          // The home screens have no text fields - the keyboard only appears
+          // for dialogs (which move themselves above it). Don't squash the
+          // workflow behind the dialog when it does.
+          resizeToAvoidBottomInset: false,
           appBar: AppBar(
             title: const Text("SMT Reel Loader"),
             actions: [

@@ -478,3 +478,94 @@ class StepBusy extends StatelessWidget {
     ),
   );
 }
+
+/// The action the user should take on this step - the same style, at the
+/// top left, on every step.
+class StepHeading extends StatelessWidget {
+  const StepHeading({super.key, required this.title, this.instruction = ""});
+
+  final String title;
+
+  /// One line explaining the action (optional).
+  final String instruction;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          key: const Key("step-action"),
+          textAlign: TextAlign.start,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        if (instruction.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            instruction,
+            key: const Key("step-instruction"),
+            textAlign: TextAlign.start,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+/// Standard layout for every workflow step:
+///
+///   heading (action + instruction)
+///   optional banner (e.g. the MPN being loaded)
+///   content (scrolls)
+///   fixed action buttons at the bottom
+class StepLayout extends StatelessWidget {
+  const StepLayout({
+    super.key,
+    required this.title,
+    this.instruction = "",
+    this.banner,
+    required this.body,
+    this.actions = const [],
+  });
+
+  final String title;
+  final String instruction;
+
+  /// Shown between the heading and the content (e.g. the MPN being loaded).
+  final Widget? banner;
+
+  /// The content - usually a [StepContent] (or another scrollable).
+  final Widget body;
+
+  /// Buttons in the fixed area at the bottom (none = no area).
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      StepHeading(title: title, instruction: instruction),
+      ?banner,
+      Expanded(child: body),
+      if (actions.isNotEmpty) StepActions(children: actions),
+    ],
+  );
+}
+
+/// Scrolling content area of a step, with the standard padding.
+class StepContent extends StatelessWidget {
+  const StepContent({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+    children: children,
+  );
+}

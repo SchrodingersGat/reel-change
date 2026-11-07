@@ -141,6 +141,65 @@ void main() {
       expect(find.byKey(const Key("workflow-progress")), findsNothing);
     });
 
+    testWidgets("Step 1 does not overflow when the keyboard opens", (
+      tester,
+    ) async {
+      // Pixel 7a (1080 x 2400 @ 420 dpi), keyboard taking ~40% of the screen
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+
+      await pumpHome(tester, configured: true);
+
+      // Status bar + gesture bar, and the keyboard as measured on the device
+      tester.view.padding = const FakeViewPadding(top: 130, bottom: 60);
+      tester.view.viewPadding = const FakeViewPadding(top: 130, bottom: 60);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 1150);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+
+      // A RenderFlex overflow would be reported as an exception
+      expect(tester.takeException(), isNull);
+      expect(find.text("SCAN PART"), findsOneWidget);
+      expect(find.byKey(const Key("workflow-progress")), findsOneWidget);
+    });
+
+    testWidgets("Step 1 scrolls instead of overflowing on a small screen", (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 420);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await pumpHome(tester, configured: true);
+
+      expect(tester.takeException(), isNull);
+      await tester.scrollUntilVisible(
+        find.text("TYPE BARCODE OR MPN"),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text("TYPE BARCODE OR MPN"), findsOneWidget);
+    });
+
+    testWidgets("Step 1 action heading is at the top, left-aligned", (
+      tester,
+    ) async {
+      await pumpHome(tester, configured: true);
+
+      final Finder heading = find.byKey(const Key("step-action"));
+      final Rect box = tester.getRect(heading);
+      final double appBarBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
+
+      // Left edge of the content padding, directly below the app bar
+      expect(box.left, 16);
+      expect(box.top, lessThanOrEqualTo(appBarBottom + 16 + 1));
+      expect(tester.widget<Text>(heading).textAlign, TextAlign.start);
+      expect(box.top, lessThan(tester.getTopLeft(find.text("SCAN PART")).dy));
+    });
+
     testWidgets("Step 1 start: scan button, progress bar, reset disabled", (
       tester,
     ) async {

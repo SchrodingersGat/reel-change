@@ -31,15 +31,15 @@ class ScanPartStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (workflow.busy) {
-      return StepBusy(message: workflow.busyMessage);
+      return StepLayout(
+        title: "Scan Empty Reel",
+        body: StepBusy(message: workflow.busyMessage),
+      );
     }
 
     final ScanOutcome? scan = workflow.partScan;
 
     if (scan == null) return _start(context);
-
-    final Widget body;
-    final List<Widget> actions;
 
     final rescan = OutlinedButton.icon(
       onPressed: () {
@@ -53,129 +53,125 @@ class ScanPartStep extends StatelessWidget {
     switch (scan) {
       case ScanResolved():
       case ScanAmbiguous() when workflow.expected != null:
-        body = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const StatusPanel(
-              kind: StatusKind.info,
-              title: "Check against the SMT machine",
-              message:
-                  "Confirm this MPN matches the part the machine is asking for on this feeder.",
+        return StepLayout(
+          title: "Check Part",
+          instruction:
+              "Confirm this MPN matches the part the SMT machine is asking for on this feeder.",
+          body: StepContent(
+            children: [PartSummaryCard(part: workflow.expected!)],
+          ),
+          actions: [
+            BigActionButton(
+              label: "CONFIRM PART",
+              icon: Icons.check,
+              color: StatusColors.ok,
+              onPressed: workflow.confirmPart,
             ),
-            const SizedBox(height: 16),
-            PartSummaryCard(part: workflow.expected!),
+            rescan,
           ],
         );
-        actions = [
-          BigActionButton(
-            label: "CONFIRM PART",
-            icon: Icons.check,
-            color: StatusColors.ok,
-            onPressed: workflow.confirmPart,
-          ),
-          rescan,
-        ];
 
       case ScanAmbiguous(:final options):
-        body = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            StatusPanel(
-              kind: StatusKind.warning,
-              title: "Several matches",
-              message:
-                  "MPN ${options.first.manufacturerPart.mpn} is listed for more than one manufacturer. "
-                  "Choose the one shown on the reel label.",
-            ),
-            const SizedBox(height: 16),
-            for (final option in options)
-              Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  title: Text(
-                    option.manufacturerPart.manufacturerName.isEmpty
-                        ? "(no manufacturer)"
-                        : option.manufacturerPart.manufacturerName,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+        return StepLayout(
+          title: "Choose Manufacturer",
+          instruction:
+              "MPN ${options.first.manufacturerPart.mpn} is listed for more than one "
+              "manufacturer. Choose the one shown on the reel label.",
+          body: StepContent(
+            children: [
+              for (final option in options)
+                Card(
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
+                    title: Text(
+                      option.manufacturerPart.manufacturerName.isEmpty
+                          ? "(no manufacturer)"
+                          : option.manufacturerPart.manufacturerName,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: Text(
+                      option.part.displayName,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    trailing: const Icon(Icons.chevron_right, size: 32),
+                    onTap: () => workflow.chooseExpected(option),
                   ),
-                  subtitle: Text(
-                    option.part.displayName,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  trailing: const Icon(Icons.chevron_right, size: 32),
-                  onTap: () => workflow.chooseExpected(option),
                 ),
-              ),
-          ],
+            ],
+          ),
+          actions: [rescan],
         );
-        actions = [rescan];
 
       case ScanDataError(:final issue):
-        body = DataIssuePanel(issue: issue, server: server);
-        actions = [
-          BigActionButton(
-            label: "SCAN AGAIN",
-            icon: Icons.qr_code_scanner,
-            onPressed: () {
-              workflow.clearPartScan();
-              _scan(context);
-            },
+        return StepLayout(
+          title: "Fix Data in InvenTree",
+          instruction:
+              "This part cannot be used until its record is fixed. Fix it, then scan again.",
+          body: StepContent(
+            children: [DataIssuePanel(issue: issue, server: server)],
           ),
-        ];
+          actions: [
+            BigActionButton(
+              label: "SCAN AGAIN",
+              icon: Icons.qr_code_scanner,
+              onPressed: () {
+                workflow.clearPartScan();
+                _scan(context);
+              },
+            ),
+          ],
+        );
 
       case ScanNotFound(:final message):
-        body = StatusPanel(
-          kind: StatusKind.error,
-          large: true,
-          title: "NOT FOUND",
-          message: message,
+        return StepLayout(
+          title: "Scan Again",
+          instruction: "The barcode was not recognised.",
+          body: StepContent(
+            children: [
+              StatusPanel(
+                kind: StatusKind.error,
+                large: true,
+                title: "NOT FOUND",
+                message: message,
+              ),
+            ],
+          ),
+          actions: [rescan],
         );
-        actions = [rescan];
 
       case ScanFailed(:final message):
-        body = StatusPanel(
-          kind: StatusKind.error,
-          large: true,
-          title: "LOOKUP FAILED",
-          message: message,
+        return StepLayout(
+          title: "Scan Again",
+          instruction: "The barcode could not be looked up.",
+          body: StepContent(
+            children: [
+              StatusPanel(
+                kind: StatusKind.error,
+                large: true,
+                title: "LOOKUP FAILED",
+                message: message,
+              ),
+            ],
+          ),
+          actions: [rescan],
         );
-        actions = [rescan];
     }
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(padding: const EdgeInsets.all(16), children: [body]),
-        ),
-        StepActions(children: actions),
-      ],
-    );
   }
 
-  Widget _start(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(24),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  // Scrolls on small screens or with large system font sizes rather than
+  // overflowing.
+  Widget _start(BuildContext context) => StepLayout(
+    title: "Scan Empty Reel",
+    instruction: "The reel the SMT machine has run out of.",
+    body: StepContent(
       children: [
-        Text(
-          "Scan Empty Reel",
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "The reel the SMT machine has run out of.",
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 16),
         BigActionButton(
           label: "SCAN PART",
           icon: Icons.qr_code_scanner,

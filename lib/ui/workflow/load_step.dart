@@ -29,144 +29,133 @@ class LoadStep extends StatelessWidget {
     final bool busy = workflow.busy;
     final double remaining = item.quantity - workflow.quantity;
 
-    return Column(
-      children: [
-        ExpectedPartHeader(part: workflow.expected!),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              // Quantity first: it is the one thing the user may need to change
-              Card(
-                margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: partial
-                        ? StatusColors.warning
-                        : Theme.of(context).colorScheme.outlineVariant,
-                    width: partial ? 3 : 1,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Quantity to move",
-                                  style: Theme.of(context).textTheme.labelLarge,
-                                ),
-                                Text(
-                                  formatQuantity(workflow.quantity),
-                                  key: const Key("transfer-quantity"),
-                                  style: TextStyle(
-                                    fontSize: 40,
-                                    fontWeight: FontWeight.bold,
-                                    color: partial
-                                        ? StatusColors.warning
-                                        : null,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, kBigButtonHeight),
-                            ),
-                            onPressed: busy
-                                ? null
-                                : () => _changeQuantity(context),
-                            icon: const Icon(Icons.edit),
-                            label: const Text("CHANGE"),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        partial
-                            ? "PARTIAL: ${formatQuantity(workflow.quantity)} of ${formatQuantity(item.quantity)}. "
-                                  "${formatQuantity(remaining)} will remain in ${item.locationPath} as a separate stock item."
-                            : "Full reel (all ${formatQuantity(item.quantity)} in stock)",
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: partial
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: partial ? StatusColors.warning : null,
-                        ),
-                      ),
-                      if (partial) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: busy
-                              ? null
-                              : () => workflow.setQuantity(item.quantity),
-                          child: const Text("USE FULL REEL"),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
+    return StepLayout(
+      title: "Load Into Machine",
+      instruction:
+          "Load the reel onto the feeder, check the quantity, then transfer it "
+          "into ${workflow.machine.pathstring}.",
+      banner: ExpectedPartHeader(part: workflow.expected!),
+      body: StepContent(
+        children: [
+          // Quantity first: it is the one thing the user may need to change
+          Card(
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: partial
+                    ? StatusColors.warning
+                    : Theme.of(context).colorScheme.outlineVariant,
+                width: partial ? 3 : 1,
               ),
-              const SizedBox(height: 12),
-              Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      _Row(label: "Reel", value: item.label, strong: true),
-                      _Row(
-                        label: "MPN",
-                        value: workflow.isAlternate
-                            ? "${item.mpn}  (ALTERNATE)"
-                            : item.mpn,
-                        color: workflow.isAlternate
-                            ? StatusColors.warning
-                            : null,
-                        strong: true,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Quantity to move",
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            Text(
+                              formatQuantity(workflow.quantity),
+                              key: const Key("transfer-quantity"),
+                              style: TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: partial ? StatusColors.warning : null,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      _Row(label: "From", value: item.locationPath),
-                      _Row(
-                        label: "To",
-                        value: workflow.machine.pathstring,
-                        strong: true,
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, kBigButtonHeight),
+                        ),
+                        onPressed: busy ? null : () => _changeQuantity(context),
+                        icon: const Icon(Icons.edit),
+                        label: const Text("CHANGE"),
                       ),
                     ],
                   ),
-                ),
+                  Text(
+                    partial
+                        ? "PARTIAL: ${formatQuantity(workflow.quantity)} of ${formatQuantity(item.quantity)}. "
+                              "${formatQuantity(remaining)} will remain in ${item.locationPath} as a separate stock item."
+                        : "Full reel (all ${formatQuantity(item.quantity)} in stock)",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: partial ? FontWeight.bold : FontWeight.normal,
+                      color: partial ? StatusColors.warning : null,
+                    ),
+                  ),
+                  if (partial) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: busy
+                          ? null
+                          : () => workflow.setQuantity(item.quantity),
+                      child: const Text("USE FULL REEL"),
+                    ),
+                  ],
+                ],
               ),
-              if (workflow.transferError != null) ...[
-                const SizedBox(height: 16),
-                StatusPanel(
-                  kind: StatusKind.error,
-                  large: true,
-                  title: "TRANSFER NOT MADE",
-                  message: workflow.transferError!,
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
-        StepActions(
-          children: [
-            BigActionButton(
-              label: "TRANSFER INTO MACHINE",
-              icon: Icons.move_down,
-              color: partial ? StatusColors.warning : StatusColors.ok,
-              height: 88,
-              busy: busy,
-              onPressed: workflow.transfer,
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Row(label: "Reel", value: item.label, strong: true),
+                  _Row(
+                    label: "MPN",
+                    value: workflow.isAlternate
+                        ? "${item.mpn}  (ALTERNATE)"
+                        : item.mpn,
+                    color: workflow.isAlternate ? StatusColors.warning : null,
+                    strong: true,
+                  ),
+                  _Row(label: "From", value: item.locationPath),
+                  _Row(
+                    label: "To",
+                    value: workflow.machine.pathstring,
+                    strong: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (workflow.transferError != null) ...[
+            const SizedBox(height: 16),
+            StatusPanel(
+              kind: StatusKind.error,
+              large: true,
+              title: "TRANSFER NOT MADE",
+              message: workflow.transferError!,
             ),
           ],
+        ],
+      ),
+      actions: [
+        BigActionButton(
+          label: "TRANSFER INTO MACHINE",
+          icon: Icons.move_down,
+          color: partial ? StatusColors.warning : StatusColors.ok,
+          height: 88,
+          busy: busy,
+          onPressed: workflow.transfer,
         ),
       ],
     );

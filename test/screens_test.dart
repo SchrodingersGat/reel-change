@@ -18,6 +18,7 @@ import "package:inventree_smt/inventree/models.dart";
 import "package:inventree_smt/ui/home_screen.dart";
 import "package:inventree_smt/ui/settings_screen.dart";
 import "package:inventree_smt/ui/workflow/done_step.dart";
+import "package:inventree_smt/ui/workflow/select_stock_step.dart";
 import "package:inventree_smt/workflow/load_workflow.dart";
 
 import "fake_inventree.dart";
@@ -124,6 +125,75 @@ void main() {
 
     expect(find.byKey(const Key("location-problems")), findsNothing);
     expect(find.text("SCAN PART"), findsOneWidget);
+    await finish(tester);
+  });
+
+  testWidgets("Every step has the same action heading at the top left", (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
+    await connect(tester, prefs: const AppPreferences(autoReturn: false));
+    await pumpHome(tester);
+
+    Rect? first;
+    TextStyle? firstStyle;
+    final List<String> titles = [];
+
+    void checkHeading() {
+      final Finder heading = find.byKey(const Key("step-action"));
+      expect(heading, findsOneWidget);
+      final Rect box = tester.getRect(heading);
+      final Text text = tester.widget<Text>(heading);
+      titles.add(text.data!);
+      expect(text.textAlign, TextAlign.start, reason: text.data);
+      first ??= box;
+      firstStyle ??= text.style;
+      expect(box.left, first!.left, reason: text.data);
+      expect(box.top, first!.top, reason: text.data);
+      expect(text.style, firstStyle, reason: text.data);
+    }
+
+    checkHeading(); // step 1 start
+
+    await typeBarcode(tester, "INV-SI1007");
+    checkHeading(); // step 1 check part
+
+    await tester.tap(find.text("CONFIRM PART"));
+    await settle(tester);
+    checkHeading(); // step 2 select
+
+    await tester.tap(find.byKey(const Key("candidate-1000")));
+    await tester.pump();
+    checkHeading(); // step 2 scan selected
+
+    // (Scanning opens the camera - drive the verification directly)
+    final LoadWorkflow wf = tester
+        .widget<SelectStockStep>(find.byType(SelectStockStep))
+        .workflow;
+    await tester.runAsync(() => wf.verifyScan("INV-SI1000"));
+    await tester.pump();
+    checkHeading(); // step 2 confirm
+
+    await tester.tap(find.text("CONFIRM REEL"));
+    await tester.pump();
+    checkHeading(); // step 3
+
+    await tester.tap(find.text("TRANSFER INTO MACHINE"));
+    await settle(tester);
+    checkHeading(); // done
+
+    expect(titles, [
+      "Scan Empty Reel",
+      "Check Part",
+      "Select Replacement Reel",
+      "Scan Selected Reel",
+      "Confirm Reel",
+      "Load Into Machine",
+      "Transfer Complete",
+    ]);
     await finish(tester);
   });
 
