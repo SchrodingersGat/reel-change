@@ -45,6 +45,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = "";
 
+  // Null until checked
+  bool? _dataWedgeInstalled;
+
   AppLog get _log => widget.log ?? appLog;
 
   @override
@@ -53,6 +56,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     widget.device.appVersion().then((v) {
       if (mounted) setState(() => _appVersion = v);
     });
+    widget.device.dataWedgeInstalled().then((v) {
+      if (mounted) setState(() => _dataWedgeInstalled = v);
+    });
+  }
+
+  Future<void> _setScanner(ScannerMode? mode) async {
+    if (mode == null || mode == widget.store.prefs.scannerMode) return;
+    await _setPrefs(widget.store.prefs.copyWith(scannerMode: mode));
+    if (mode == ScannerMode.dataWedge) await _setUpDataWedge();
+  }
+
+  /// Create the DataWedge profile which sends scans to this app.
+  Future<void> _setUpDataWedge() async {
+    final bool ok = await widget.device.configureDataWedge();
+    if (!mounted) return;
+    _snack(
+      ok
+          ? "DataWedge profile \"Reel Change\" set up."
+          : "DataWedge is not installed on this device.",
+    );
   }
 
   void _snack(String message) => ScaffoldMessenger.of(
@@ -253,6 +276,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _setPrefs(prefs.copyWith(keepScreenOn: v)),
                   ),
                 ],
+              ),
+            ),
+            const _SectionTitle("Scanner"),
+            Card(
+              margin: EdgeInsets.zero,
+              child: RadioGroup<ScannerMode>(
+                groupValue: prefs.scannerMode,
+                onChanged: _setScanner,
+                child: Column(
+                  children: [
+                    const RadioListTile<ScannerMode>(
+                      key: Key("pref-scanner-camera"),
+                      value: ScannerMode.camera,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      title: Text("Camera", style: TextStyle(fontSize: 18)),
+                      subtitle: Text("Scan barcodes with the phone's camera."),
+                    ),
+                    const Divider(height: 1),
+                    RadioListTile<ScannerMode>(
+                      key: const Key("pref-scanner-datawedge"),
+                      value: ScannerMode.dataWedge,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      title: const Text(
+                        "Zebra scanner (DataWedge)",
+                        style: TextStyle(fontSize: 18),
+                      ),
+                      subtitle: Text(
+                        _dataWedgeInstalled == false
+                            ? "DataWedge was not found on this device."
+                            : "Use the built-in scanner. Press the trigger "
+                                  "on any scan step.",
+                        style: _dataWedgeInstalled == false
+                            ? const TextStyle(color: StatusColors.warning)
+                            : null,
+                      ),
+                    ),
+                    if (prefs.scannerMode == ScannerMode.dataWedge)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: OutlinedButton.icon(
+                          key: const Key("pref-datawedge-setup"),
+                          onPressed: _setUpDataWedge,
+                          icon: const Icon(Icons.settings_remote),
+                          label: const Text("SET UP DATAWEDGE PROFILE"),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             const _SectionTitle("Connection"),

@@ -156,5 +156,26 @@ void main() {
       expect(other.prefs.autoReturn, isFalse);
       expect(other.settings.isComplete, isFalse);
     });
+
+    test("Scanner mode: camera by default, persisted", () async {
+      final backend = MemorySettingsBackend();
+      final store = SettingsStore(backend);
+      await store.load("https://a.example.com/");
+      expect(store.prefs.scannerMode, ScannerMode.camera);
+
+      await store.savePrefs(
+        store.prefs.copyWith(scannerMode: ScannerMode.dataWedge),
+      );
+      final again = SettingsStore(backend);
+      await again.load("https://a.example.com/");
+      expect(again.prefs.scannerMode, ScannerMode.dataWedge);
+      expect(again.prefs.autoReturn, isTrue);
+
+      // Unknown stored value - fall back to the camera
+      expect(
+        AppPreferences.fromJson({"scanner": "laser"}).scannerMode,
+        ScannerMode.camera,
+      );
+    });
   });
 }

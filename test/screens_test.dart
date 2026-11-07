@@ -3,6 +3,7 @@
  * (run against the fake InvenTree server).
  */
 
+import "dart:async";
 import "dart:io";
 
 import "package:flutter/material.dart";
@@ -25,6 +26,23 @@ import "fake_inventree.dart";
 
 class FakeDevice extends DeviceService {
   final List<bool> keepScreenOn = [];
+
+  /// Hardware (DataWedge) scans - add barcodes to simulate the trigger.
+  final StreamController<String> scanner = StreamController<String>.broadcast();
+  bool dataWedge = true;
+  int dataWedgeConfigured = 0;
+
+  @override
+  Stream<String> get hardwareScans => scanner.stream;
+
+  @override
+  Future<bool> dataWedgeInstalled() async => dataWedge;
+
+  @override
+  Future<bool> configureDataWedge() async {
+    dataWedgeConfigured++;
+    return dataWedge;
+  }
 
   @override
   Future<void> setKeepScreenOn(bool on) async => keepScreenOn.add(on);
@@ -95,6 +113,21 @@ void main() {
   }
 
   tearDown(() async => server.close());
+
+  /// Scroll the settings list until the widget with [key] is built and shown.
+  Future<void> reveal(WidgetTester tester, String key) async {
+    await tester.scrollUntilVisible(
+      find.byKey(Key(key)),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pump();
+  }
 
   /// Requests made from taps run on the test's fake clock - close the HTTP
   /// client so its idle-connection timers do not outlive the test.
@@ -243,6 +276,91 @@ void main() {
       "Transfer Complete",
     ]);
     await finish(tester);
+  });
+
+  group("Hardware scanner (DataWedge):", () {
+    const dataWedge = AppPreferences(scannerMode: ScannerMode.dataWedge);
+
+    Future<void> trigger(WidgetTester tester, String barcode) async {
+      device.scanner.add(barcode);
+      await tester.pump();
+      await settle(tester);
+    }
+
+    testWidgets("The trigger drives steps 1 and 2", (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+
+      await connect(tester, prefs: dataWedge);
+      await pumpHome(tester);
+
+      // Profile checked on startup
+      expect(device.dataWedgeConfigured, 1);
+      expect(find.byKey(const Key("trigger-hint")), findsOneWidget);
+
+      // Ignored while a dialog is open
+      await tester.tap(find.text("TYPE BARCODE OR MPN"));
+      await tester.pumpAndSettle();
+      await trigger(tester, "INV-SI1007");
+      expect(find.text("CONFIRM PART"), findsNothing);
+      await tester.tap(find.text("CANCEL"));
+      await tester.pumpAndSettle();
+
+      // Step 1: scan the empty reel
+      await trigger(tester, "INV-SI1007");
+      expect(find.text("CONFIRM PART"), findsOneWidget);
+
+      await tester.tap(find.text("CONFIRM PART"));
+      await settle(tester);
+      expect(find.text("Select Replacement Reel"), findsOneWidget);
+
+      // Step 2: scanning a reel's stock label selects and verifies it
+      await trigger(tester, "INV-SI1000");
+      expect(find.text("Confirm Reel"), findsOneWidget);
+      expect(find.text("CONFIRM REEL"), findsOneWidget);
+
+      // Step 3: the trigger does nothing
+      await tester.tap(find.text("CONFIRM REEL"));
+      await tester.pump();
+      await trigger(tester, "INV-SI1001");
+      expect(find.text("Load Into Machine"), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets("SCAN PART waits for the trigger instead of the camera", (
+      tester,
+    ) async {
+      await connect(tester, prefs: dataWedge);
+      await pumpHome(tester);
+
+      await tester.tap(find.text("SCAN PART"));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key("trigger-scan-prompt")), findsOneWidget);
+
+      // Too long to be a label - ignored
+      await trigger(tester, "X" * (kMaxBarcodeLength + 1));
+      expect(find.byKey(const Key("trigger-scan-prompt")), findsOneWidget);
+
+      await trigger(tester, "INV-SI1007");
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key("trigger-scan-prompt")), findsNothing);
+      expect(find.text("CONFIRM PART"), findsOneWidget);
+      await finish(tester);
+    });
+
+    testWidgets("Camera mode ignores the hardware scanner", (tester) async {
+      await connect(tester);
+      await pumpHome(tester);
+
+      expect(device.dataWedgeConfigured, 0);
+      expect(find.byKey(const Key("trigger-hint")), findsNothing);
+      await trigger(tester, "INV-SI1007");
+      expect(find.text("CONFIRM PART"), findsNothing);
+      expect(find.text("SCAN PART"), findsOneWidget);
+      await finish(tester);
+    });
   });
 
   testWidgets("Missing permissions block the workflow", (tester) async {
@@ -397,6 +515,30 @@ void main() {
     await settle(tester);
     expect(settings.prefs.keepScreenOn, isFalse);
 
+    // Scanner: choosing DataWedge saves it and sets up the profile
+    expect(settings.prefs.scannerMode, ScannerMode.camera);
+    expect(find.byKey(const Key("pref-datawedge-setup")), findsNothing);
+    await reveal(tester, "pref-scanner-datawedge");
+    await tester.tap(find.byKey(const Key("pref-scanner-datawedge")));
+    await settle(tester);
+    expect(settings.prefs.scannerMode, ScannerMode.dataWedge);
+    expect(device.dataWedgeConfigured, 1);
+    expect(
+      find.text('DataWedge profile "Reel Change" set up.'),
+      findsOneWidget,
+    );
+
+    await reveal(tester, "pref-datawedge-setup");
+    await tester.tap(find.byKey(const Key("pref-datawedge-setup")));
+    await settle(tester);
+    expect(device.dataWedgeConfigured, 2);
+
+    await reveal(tester, "pref-scanner-camera");
+    await tester.tap(find.byKey(const Key("pref-scanner-camera")));
+    await settle(tester);
+    expect(settings.prefs.scannerMode, ScannerMode.camera);
+    expect(find.byKey(const Key("pref-datawedge-setup")), findsNothing);
+
     // Lower sections
     await tester.scrollUntilVisible(
       find.text("9.9.9 (99)"),
@@ -416,6 +558,41 @@ void main() {
     await tester.tap(find.byKey(const Key("settings-view-log")));
     await tester.pumpAndSettle();
     expect(find.text("Something went wrong"), findsOneWidget);
+    await finish(tester);
+  });
+
+  testWidgets("Settings warns when DataWedge is not installed", (tester) async {
+    tester.view.physicalSize = const Size(1080, 2424);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
+    await connect(tester);
+    device.dataWedge = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsScreen(
+          store: settings,
+          repo: InvenTreeRepository(auth.api),
+          auth: auth,
+          device: device,
+        ),
+      ),
+    );
+    await settle(tester);
+
+    await reveal(tester, "pref-scanner-datawedge");
+    expect(
+      find.text("DataWedge was not found on this device."),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key("pref-scanner-datawedge")));
+    await settle(tester);
+    expect(
+      find.text("DataWedge is not installed on this device."),
+      findsOneWidget,
+    );
     await finish(tester);
   });
 }

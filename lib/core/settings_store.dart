@@ -81,13 +81,35 @@ class MemorySettingsBackend implements SettingsBackend {
   Future<void> write(String? data) async => this.data = data;
 }
 
+/// How barcodes are scanned.
+enum ScannerMode {
+  /// The phone's camera.
+  camera("camera"),
+
+  /// A Zebra device's built-in scanner, via DataWedge broadcast intents.
+  dataWedge("datawedge");
+
+  const ScannerMode(this.id);
+
+  /// Stored value.
+  final String id;
+
+  static ScannerMode fromId(Object? id) =>
+      values.firstWhere((m) => m.id == id, orElse: () => camera);
+}
+
 /// App behaviour preferences (the same for any server).
 class AppPreferences {
-  const AppPreferences({this.autoReturn = true, this.keepScreenOn = true});
+  const AppPreferences({
+    this.autoReturn = true,
+    this.keepScreenOn = true,
+    this.scannerMode = ScannerMode.camera,
+  });
 
   factory AppPreferences.fromJson(Map<String, dynamic> json) => AppPreferences(
     autoReturn: json["autoReturn"] != false,
     keepScreenOn: json["keepScreenOn"] != false,
+    scannerMode: ScannerMode.fromId(json["scanner"]),
   );
 
   /// After a transfer, return to step 1 automatically after [autoReturnSeconds].
@@ -96,17 +118,25 @@ class AppPreferences {
   /// Keep the screen on while a reel swap is in progress.
   final bool keepScreenOn;
 
+  /// Camera or hardware scanner (DataWedge).
+  final ScannerMode scannerMode;
+
   static const int autoReturnSeconds = 5;
 
-  AppPreferences copyWith({bool? autoReturn, bool? keepScreenOn}) =>
-      AppPreferences(
-        autoReturn: autoReturn ?? this.autoReturn,
-        keepScreenOn: keepScreenOn ?? this.keepScreenOn,
-      );
+  AppPreferences copyWith({
+    bool? autoReturn,
+    bool? keepScreenOn,
+    ScannerMode? scannerMode,
+  }) => AppPreferences(
+    autoReturn: autoReturn ?? this.autoReturn,
+    keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+    scannerMode: scannerMode ?? this.scannerMode,
+  );
 
   Map<String, dynamic> toJson() => {
     "autoReturn": autoReturn,
     "keepScreenOn": keepScreenOn,
+    "scanner": scannerMode.id,
   };
 }
 

@@ -2,6 +2,7 @@ import "package:flutter/material.dart";
 
 import "package:reel_change/inventree/inventree_repository.dart";
 import "package:reel_change/inventree/models.dart";
+import "package:reel_change/scanner/hardware_scanner.dart";
 import "package:reel_change/scanner/scanner_page.dart";
 import "package:reel_change/ui/theme.dart";
 import "package:reel_change/ui/workflow/widgets.dart";
@@ -79,12 +80,19 @@ class SelectStockStep extends StatelessWidget {
 
     final (String title, String instruction) = _heading();
 
-    return StepLayout(
-      title: title,
-      instruction: instruction,
-      banner: ExpectedPartHeader(part: expected),
-      body: loading ? StepBusy(message: workflow.busyMessage) : _list(context),
-      actions: loading ? const [] : _actions(context),
+    // Hardware scanner trigger: verify a reel label
+    return HardwareScanListener(
+      enabled: !workflow.busy,
+      onScan: workflow.verifyScan,
+      child: StepLayout(
+        title: title,
+        instruction: instruction,
+        banner: ExpectedPartHeader(part: expected),
+        body: loading
+            ? StepBusy(message: workflow.busyMessage)
+            : _list(context),
+        actions: loading ? const [] : _actions(context),
+      ),
     );
   }
 

@@ -48,5 +48,7 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Zebra DataWedge (scanner option in the settings) -->
+        <package android:name="com.symbol.datawedge"/>
     </queries>
 </manifest>

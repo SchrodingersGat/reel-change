@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/scanner/hardware_scanner.dart";
 import "package:reel_change/scanner/scanner_page.dart";
 import "package:reel_change/ui/theme.dart";
 import "package:reel_change/ui/workflow/widgets.dart";
@@ -28,8 +29,20 @@ class ScanPartStep extends StatelessWidget {
     if (barcode != null) await workflow.scanPart(barcode);
   }
 
+  /// Hardware scanner trigger: scan (or re-scan) the empty reel.
+  void _onTrigger(String barcode) {
+    workflow.clearPartScan();
+    workflow.scanPart(barcode);
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => HardwareScanListener(
+    enabled: !workflow.busy,
+    onScan: _onTrigger,
+    child: _content(context),
+  );
+
+  Widget _content(BuildContext context) {
     if (workflow.busy) {
       return StepLayout(
         title: "Scan Empty Reel",
@@ -184,6 +197,15 @@ class ScanPartStep extends StatelessWidget {
           icon: const Icon(Icons.keyboard),
           label: const Text("TYPE BARCODE OR MPN"),
         ),
+        if (ScannerScope.maybeOf(context)?.hardware ?? false) ...[
+          const SizedBox(height: 24),
+          Text(
+            "Or press the scanner trigger.",
+            key: const Key("trigger-hint"),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
       ],
     ),
   );

@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 
 import "package:reel_change/auth/auth_service.dart";
@@ -5,6 +7,7 @@ import "package:reel_change/core/app_log.dart";
 import "package:reel_change/core/device.dart";
 import "package:reel_change/core/settings_store.dart";
 import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/scanner/hardware_scanner.dart";
 import "package:reel_change/ui/settings_screen.dart";
 import "package:reel_change/ui/theme.dart";
 import "package:reel_change/ui/workflow/done_step.dart";
@@ -61,6 +64,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadSettings() async {
     try {
       await widget.settings.load(widget.auth.api.server);
+
+      // Make sure the DataWedge profile exists (e.g. after DataWedge was
+      // reset, or the app was reinstalled)
+      if (widget.settings.prefs.scannerMode == ScannerMode.dataWedge) {
+        unawaited(widget.device.configureDataWedge());
+      }
+
       final LocationCheckResult result = await recheckLocations(
         widget.settings,
         _repo,
@@ -207,7 +217,13 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (info != null) LoginStatusBanner(info: info),
-                Expanded(child: _body()),
+                Expanded(
+                  child: ScannerScope(
+                    mode: widget.settings.prefs.scannerMode,
+                    scans: widget.device.hardwareScans,
+                    child: _body(),
+                  ),
+                ),
                 if (configured) WorkflowProgressBar(step: _workflow.step),
               ],
             ),

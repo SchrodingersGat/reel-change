@@ -3,15 +3,27 @@ import "package:mobile_scanner/mobile_scanner.dart";
 
 import "package:reel_change/inventree/inventree_repository.dart";
 import "package:reel_change/scanner/eci.dart";
+import "package:reel_change/scanner/hardware_scanner.dart";
 import "package:reel_change/ui/theme.dart";
 
-/// Open the scanner full-screen. Returns the scanned (or typed) barcode, or
-/// null if cancelled.
+/// Open the scanner full-screen: the camera, or a "press the trigger" page
+/// when the hardware scanner (DataWedge) is chosen in the settings (see
+/// [ScannerScope]). Returns the scanned (or typed) barcode, or null if
+/// cancelled.
 Future<String?> scanBarcode(BuildContext context, {required String title}) {
+  final ScannerScope? scope = ScannerScope.maybeOf(context);
+
   return Navigator.of(context).push<String>(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => ScannerPage(title: title),
+      builder: (_) => scope != null && scope.hardware
+          ? TriggerScanPage(
+              title: title,
+              scans: scope.scans,
+              typeBarcode: (context) =>
+                  enterBarcodeManually(context, title: title),
+            )
+          : ScannerPage(title: title),
     ),
   );
 }
