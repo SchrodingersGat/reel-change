@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 
 import "package:reel_change/auth/auth_service.dart";
+import "package:reel_change/ui/spinning_logo.dart";
 
 /// Shown while checking for a stored session on launch.
 class SplashScreen extends StatelessWidget {
@@ -19,11 +20,9 @@ class SplashScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                "assets/images/logo.png",
-                key: const Key("splash-logo"),
-                width: 160,
-                height: 160,
+              const SpinningLogo(
+                size: 160,
+                imageKey: Key("splash-logo"),
                 semanticLabel: "Reel Change logo",
               ),
               const SizedBox(height: 24),
@@ -31,8 +30,6 @@ class SplashScreen extends StatelessWidget {
                 "Reel Change",
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 32),
-              const CircularProgressIndicator(),
               const SizedBox(height: 16),
               Text(
                 server.isEmpty ? "Starting..." : "Connecting to $server",

@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 
+import "package:reel_change/ui/spinning_logo.dart";
 import "package:reel_change/inventree/inventree_repository.dart";
 import "package:reel_change/inventree/models.dart";
 import "package:reel_change/ui/theme.dart";
@@ -467,11 +468,7 @@ class StepBusy extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(
-          width: 64,
-          height: 64,
-          child: CircularProgressIndicator(strokeWidth: 6),
-        ),
+        const SpinningLogo(size: 96),
         const SizedBox(height: 24),
         Text(message, style: Theme.of(context).textTheme.titleLarge),
       ],
