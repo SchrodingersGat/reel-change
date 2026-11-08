@@ -146,6 +146,17 @@ void main() {
       expect((r2 as ScanNotFound).message, isNot(contains("plugin")));
     });
 
+    test("Plugin \"None\" gets the generic no-match message", () async {
+      server.inventory.pluginErrors["UNKNOWN-LABEL"] =
+          "No match found for barcode data";
+      server.inventory.pluginErrorName = "None";
+
+      final r = await repo.resolveBarcode("UNKNOWN-LABEL");
+      final String message = (r as ScanNotFound).message;
+      expect(message, isNot(contains("plugin")));
+      expect(message, startsWith("No match found in InvenTree"));
+    });
+
     test("A plugin error does not block an exact MPN match", () async {
       server.inventory.pluginErrors["RC0402-10K"] = "Some plugin problem";
       final r = await repo.resolveBarcode("RC0402-10K");
@@ -158,6 +169,18 @@ void main() {
         isNull,
       );
       expect(PluginError.fromResponse({"plugin": "X"}), isNull);
+
+      // "None" (Python's None as text) means no plugin matched
+      for (final none in ["None", "none", " NULL "]) {
+        expect(
+          PluginError.fromResponse({
+            "error": "No match found for barcode data",
+            "plugin": none,
+          }),
+          isNull,
+          reason: none,
+        );
+      }
       final e = PluginError.fromResponse({
         "error": ["Bad", "data"],
         "plugin": " LCSC ",

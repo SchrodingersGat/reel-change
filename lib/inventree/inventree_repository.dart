@@ -50,8 +50,13 @@ class PluginError {
   final String message;
 
   static PluginError? fromResponse(Map<String, dynamic> body) {
+    // No plugin matched: null, or Python's None as text ("None")
     final dynamic plugin = body["plugin"];
-    if (plugin is! String || plugin.trim().isEmpty) return null;
+    if (plugin is! String) return null;
+    final String name = plugin.trim();
+    if (name.isEmpty || const ["none", "null"].contains(name.toLowerCase())) {
+      return null;
+    }
 
     final dynamic error = body["error"];
     final String message = switch (error) {
@@ -61,7 +66,7 @@ class PluginError {
     }.trim();
     if (message.isEmpty) return null;
 
-    return PluginError(plugin.trim(), message);
+    return PluginError(name, message);
   }
 }
 

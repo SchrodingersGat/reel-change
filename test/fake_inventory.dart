@@ -140,6 +140,9 @@ class FakeInventory {
   // Barcode data -> error reported by a (supplier) barcode plugin
   final Map<String, String> pluginErrors = {};
 
+  // Plugin name returned with those errors
+  String pluginErrorName = "DigiKeyPlugin";
+
   // Set to make the supplier part list fail (names are optional)
   bool failSupplierPartList = false;
 
@@ -279,7 +282,7 @@ class FakeInventory {
         200,
         {
           "error": pluginError,
-          "plugin": "DigiKeyPlugin",
+          "plugin": pluginErrorName,
           "barcode_data": data,
           "success": "Match found for barcode data",
         },
