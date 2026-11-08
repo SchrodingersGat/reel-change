@@ -227,6 +227,32 @@ void main() {
   });
 
   group("Step 2 - select stock:", () {
+    test("Scanning the empty reel again is an error", () async {
+      await toStep2(); // empty reel #1007 (in the machine)
+      await wf.verifyScan("INV-SI1007");
+      expect(wf.selectionVerified, isFalse);
+      expect(wf.verifyIsError, isTrue);
+      expect(wf.verifyMessage, startsWith("SAME REEL"));
+      expect(wf.verifyMessage, contains("#1007"));
+      expect(wf.selected, isNull);
+    });
+
+    test("An empty reel still in the source location is not listed", () async {
+      // InvenTree still has the empty reel #1000 in Stores
+      await wf.scanPart("INV-SI1000");
+      await wf.confirmPart();
+      expect(wf.candidates.map((c) => c.item.pk), isNot(contains(1000)));
+
+      await wf.verifyScan("INV-SI1000");
+      expect(wf.verifyMessage, startsWith("SAME REEL"));
+      expect(wf.selected, isNull);
+
+      // A supplier label picks the only other reel with the MPN, not the empty one
+      await wf.verifyScan("SUPPLIER:200");
+      expect(wf.selectionVerified, isTrue);
+      expect(wf.selected?.item.pk, 1001);
+    });
+
     test(
       "Candidates: exact first, then alternates, then data errors; machine and other locations excluded",
       () async {

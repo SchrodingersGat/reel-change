@@ -248,7 +248,19 @@ class LoadWorkflow extends ChangeNotifier {
       );
       if (stale()) return;
 
-      _candidates = list;
+      // The empty reel can't be its own replacement (it may still be in the
+      // source location if InvenTree has not been updated)
+      final int? emptyPk = expected.stockItem?.pk;
+      _candidates = [
+        for (final c in list)
+          if (c.item.pk != emptyPk) c,
+      ];
+      if (_candidates.length != list.length) {
+        appLog.info(
+          "workflow",
+          "Step 2: empty reel #$emptyPk left out of the replacement list",
+        );
+      }
       appLog.info(
         "workflow",
         "Step 2: ${list.where((c) => c.kind == CandidateKind.exact).length} exact, "
@@ -397,6 +409,15 @@ class LoadWorkflow extends ChangeNotifier {
     StockItemInfo scanned,
     ResolvedPart expected,
   ) {
+    // The empty reel scanned in step 1
+    if (expected.stockItem != null && expected.stockItem!.pk == scanned.pk) {
+      _verifyFail(
+        "SAME REEL. Reel ${scanned.label} is the empty reel you scanned in step 1. "
+        "Scan the label on the replacement reel.",
+      );
+      return;
+    }
+
     final listed = _candidates.where(
       (c) => c.item.pk == scanned.pk && c.selectable,
     );
