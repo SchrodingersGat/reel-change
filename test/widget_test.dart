@@ -261,7 +261,16 @@ void main() {
     final auth = AuthService(store: MemoryCredentialStore());
     await tester.pumpWidget(MaterialApp(home: SplashScreen(auth: auth)));
 
+    // The reel without the arrow, spinning about the middle of the image
     final Image logo = tester.widget(find.byKey(const Key("splash-logo")));
-    expect((logo.image as AssetImage).assetName, "assets/images/logo.png");
+    expect((logo.image as AssetImage).assetName, "assets/images/reel.png");
+    final RotationTransition spin = tester.widget(
+      find.ancestor(
+        of: find.byKey(const Key("splash-logo")),
+        matching: find.byType(RotationTransition),
+      ),
+    );
+    expect(spin.alignment, Alignment.center);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 }

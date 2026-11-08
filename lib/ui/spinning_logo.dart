@@ -1,9 +1,14 @@
 import "package:flutter/material.dart";
 
-/// The app logo, spinning - the app's loading indicator.
+/// The reel from the app logo (without its arrow), spinning - the app's
+/// loading indicator.
 ///
 /// Turns anticlockwise, the way the arrow in the logo points. Stays still
 /// when the system asks for animations to be removed (accessibility).
+///
+/// assets/images/reel.png is rendered from img/reel.svg: the logo without the
+/// arrow, with its viewBox centred on the reel's hub - so the reel turns
+/// about the middle of the image.
 class SpinningLogo extends StatefulWidget {
   const SpinningLogo({
     super.key,
@@ -21,17 +26,7 @@ class SpinningLogo extends StatefulWidget {
 
   static const Duration turnDuration = Duration(milliseconds: 1600);
 
-  /// Centre of the reel's hub (the small circle) within the logo image.
-  ///
-  /// In img/logo.svg the hub is at (11.914, 12.878) in the 24 x 24 viewBox
-  /// (circle at (-16.392, 4.392), rotated -120 degrees, then translated by
-  /// (-0.086, 0.878)); assets/images/logo.png is rendered edge to edge from
-  /// it, so the same point is about (254.2, 274.7) px of 512. The logo spins
-  /// around this point, not the middle of the image.
-  static const Alignment hubAlignment = Alignment(
-    11.914 / 12 - 1,
-    12.878 / 12 - 1,
-  );
+  static const String reelAsset = "assets/images/reel.png";
 
   @override
   State<SpinningLogo> createState() => _SpinningLogoState();
@@ -70,23 +65,14 @@ class _SpinningLogoState extends State<SpinningLogo>
   }
 
   @override
-  Widget build(BuildContext context) => Transform.translate(
-    // Put the hub (not the middle of the image) at the centre of this
-    // widget, so the spinning reel stays centred
-    offset: Offset(
-      -SpinningLogo.hubAlignment.x * widget.size / 2,
-      -SpinningLogo.hubAlignment.y * widget.size / 2,
-    ),
-    child: RotationTransition(
-      turns: _turns,
-      alignment: SpinningLogo.hubAlignment,
-      child: Image.asset(
-        "assets/images/logo.png",
-        key: widget.imageKey,
-        width: widget.size,
-        height: widget.size,
-        semanticLabel: widget.semanticLabel,
-      ),
+  Widget build(BuildContext context) => RotationTransition(
+    turns: _turns,
+    child: Image.asset(
+      SpinningLogo.reelAsset,
+      key: widget.imageKey,
+      width: widget.size,
+      height: widget.size,
+      semanticLabel: widget.semanticLabel,
     ),
   );
 }

@@ -58,6 +58,7 @@ flutter:
 
   assets:
     - assets/images/logo.png # Rendered from img/logo.svg
+    - assets/images/reel.png # Rendered from img/reel.svg (logo without the arrow, for the loading spinner)
 
   # To add assets to your application, add an assets section, like this:
   # assets:
