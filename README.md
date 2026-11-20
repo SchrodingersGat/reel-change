@@ -11,7 +11,7 @@ Reel Change is an Android companion app for [InvenTree](https://inventree.org). 
 A reel change is a guided three-step workflow:
 
 1. **Scan part:** scan the empty reel coming off the machine and confirm its MPN.
-2. **Select reel:** choose a replacement reel from the source location. Reels with an exact MPN match are listed first, then approved alternates. The chosen reel must be confirmed by scanning its label, and loading an alternate needs an extra confirmation.
+2. **Select reel:** choose a replacement reel from the source location. Reels with an exact MPN match are listed first, then approved alternates. The chosen reel must be confirmed by scanning its label, and loading an alternate needs an extra confirmation. If a reel has no barcode or it cannot be scanned, long-press it in the list and choose **Use this stock item**; after a confirmation it goes straight to step 3 without a scan, and this is recorded in the InvenTree transfer notes.
 3. **Load:** check the quantity (the full reel by default, adjustable if needed) and transfer the reel into the machine location.
 
 Progress is shown at the bottom of the screen, and **RESET** is always available to start over.
