@@ -71,7 +71,13 @@ class ScanPartStep extends StatelessWidget {
           instruction:
               "Confirm this MPN matches the part the SMT machine is asking for on this feeder.",
           body: StepContent(
-            children: [PartSummaryCard(part: workflow.expected!)],
+            children: [
+              PartSummaryCard(
+                part: workflow.expected!,
+                bomMatch: workflow.expectedBomMatch,
+                buildOrder: workflow.bom?.build,
+              ),
+            ],
           ),
           actions: [
             BigActionButton(
@@ -151,6 +157,25 @@ class ScanPartStep extends StatelessWidget {
                 kind: StatusKind.error,
                 large: true,
                 title: "NOT FOUND",
+                message: message,
+              ),
+            ],
+          ),
+          actions: [rescan],
+        );
+
+      case ScanNotInBom(:final message):
+        return StepLayout(
+          title: "Wrong Part for Build",
+          instruction:
+              "This part cannot be loaded for the selected build order.",
+          body: StepContent(
+            children: [
+              StatusPanel(
+                key: const Key("not-in-bom"),
+                kind: StatusKind.error,
+                large: true,
+                title: "NOT IN BOM",
                 message: message,
               ),
             ],

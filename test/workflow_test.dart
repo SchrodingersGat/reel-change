@@ -226,6 +226,179 @@ void main() {
     });
   });
 
+  group("Build order BOM check:", () {
+    late BuildOrderInfo build1;
+
+    setUp(() async {
+      build1 = await repo.getBuild(1);
+      wf.settings = WorkflowSettings(
+        source: source,
+        machine: machine,
+        build: build1,
+      );
+    });
+
+    test("Build search lists outstanding builds only", () async {
+      final builds = await repo.searchBuilds("");
+      expect(builds.map((b) => b.reference), ["BO-0001"]);
+      expect(builds.single.partName, "Assembly A");
+      expect(builds.single.isActive, isTrue);
+    });
+
+    test("Build order barcodes and typed references", () async {
+      // Build order label
+      final label = await repo.resolveBuildBarcode("BUILD:1");
+      expect(label.build?.reference, "BO-0001");
+      expect(label.build?.partIpn, "ASM-A");
+
+      // Typed reference (any case, surrounding spaces)
+      expect((await repo.resolveBuildBarcode(" bo-0001 ")).build?.pk, 1);
+
+      // Completed build - not selectable
+      final done = await repo.resolveBuildBarcode("BUILD:2");
+      expect(done.build, isNull);
+      expect(done.error, contains("complete"));
+      expect((await repo.resolveBuildBarcode("BO-0002")).build, isNull);
+
+      // Some other kind of label, or nothing at all
+      final other = await repo.resolveBuildBarcode("INV-SI1000");
+      expect(other.error, contains("stockitem, not a build order"));
+      final none = await repo.resolveBuildBarcode("BO-9999");
+      expect(none.error, contains("No build order found"));
+      expect((await repo.resolveBuildBarcode("BUILD:99")).error, isNotNull);
+      expect((await repo.resolveBuildBarcode("")).build, isNull);
+    });
+
+    test("BOM is loaded with references and substitutes", () async {
+      server.inventory.bomSubstitutes[500] = [10];
+      final bom = await repo.getBuildBom(build1);
+      expect(bom.lines.map((l) => l.part.pk), [20, 30]);
+      expect(bom.lines.first.reference, "C1, C2");
+      expect(bom.lines.first.substitutes.map((p) => p.pk), [10]);
+      expect(bom.match(20)?.substitute, isFalse);
+      expect(bom.match(10)?.substitute, isTrue);
+      expect(bom.match(31), isNull);
+    });
+
+    test("Substitutes are loaded per line from older servers", () async {
+      server.inventory.bomOmitsSubstitutes = true;
+      server.inventory.bomSubstitutes[501] = [31];
+      final bom = await repo.getBuildBom(build1);
+      expect(bom.match(31)?.line.reference, "U1");
+      expect(server.requests, contains("GET /api/bom/substitute/"));
+    });
+
+    test("A part in the BOM can be confirmed", () async {
+      await wf.scanPart("MFR:102"); // part 20
+      expect(wf.partScan, isA<ScanResolved>());
+      expect(wf.expectedBomMatch?.line.reference, "C1, C2");
+
+      await wf.confirmPart();
+      expect(wf.step, WorkflowStep.selectStock);
+    });
+
+    test("A part not in the BOM is an error and cannot proceed", () async {
+      await wf.scanPart("INV-SI1007"); // part 10
+      expect(wf.partScan, isA<ScanNotInBom>());
+      final String message = (wf.partScan as ScanNotInBom).message;
+      expect(message, contains("RC0402-10K"));
+      expect(message, contains("BO-0001"));
+      expect(wf.expected, isNull);
+
+      await wf.confirmPart();
+      expect(wf.step, WorkflowStep.scanPart);
+    });
+
+    test("A substitute part is accepted, and recorded", () async {
+      server.inventory.bomSubstitutes[500] = [10];
+      await wf.scanPart("INV-SI1007");
+      expect(wf.partScan, isA<ScanResolved>());
+      expect(wf.expectedBomMatch?.substitute, isTrue);
+
+      await wf.confirmPart();
+      wf.select(wf.candidates.firstWhere((c) => c.item.pk == 1000));
+      await wf.verifyScan("INV-SI1000");
+      wf.confirmSelection();
+      await wf.transfer();
+
+      expect(wf.step, WorkflowStep.done, reason: wf.transferError);
+      final String notes = server.inventory.transfers.single["notes"] as String;
+      expect(notes, contains("Build BO-0001"));
+      expect(notes, contains("BOM ref C1, C2"));
+      expect(notes, contains("substitute"));
+    });
+
+    test("An ambiguous MPN is narrowed to the part in the BOM", () async {
+      await wf.scanPart("DUP-1"); // parts 30 (in BOM) and 31 (not)
+      expect(wf.partScan, isA<ScanResolved>());
+      expect(wf.expected?.manufacturerPart.pk, 103);
+    });
+
+    test("The BOM is reloaded if a part is not in the cached copy", () async {
+      await wf.scanPart("MFR:102");
+      expect(wf.partScan, isA<ScanResolved>());
+      wf.reset();
+
+      // Part 10 added as a substitute after the BOM was loaded
+      server.inventory.bomSubstitutes[500] = [10];
+      await wf.scanPart("INV-SI1007");
+      expect(wf.partScan, isA<ScanResolved>());
+      expect(server.requests.where((r) => r == "GET /api/bom/").length, 2);
+    });
+
+    test("The cached BOM is reused for parts which are in it", () async {
+      await wf.scanPart("MFR:102");
+      wf.reset();
+      await wf.scanPart("DUP-1");
+      expect(server.requests.where((r) => r == "GET /api/bom/").length, 1);
+    });
+
+    test("A completed build blocks the scan", () async {
+      wf.settings = WorkflowSettings(
+        source: source,
+        machine: machine,
+        build: await repo.getBuild(2),
+      );
+      await wf.scanPart("MFR:102");
+      expect(wf.partScan, isA<ScanFailed>());
+      expect((wf.partScan as ScanFailed).message, contains("complete"));
+      expect(wf.expected, isNull);
+    });
+
+    test("A deleted build blocks the scan", () async {
+      server.inventory.builds.remove(1);
+      await wf.scanPart("MFR:102");
+      expect((wf.partScan as ScanFailed).message, contains("no longer exists"));
+    });
+
+    test("A BOM which cannot be loaded blocks the scan", () async {
+      server.inventory.failBom = true;
+      await wf.scanPart("MFR:102");
+      expect(wf.partScan, isA<ScanFailed>());
+      expect(
+        (wf.partScan as ScanFailed).message,
+        contains("BOM for build BO-0001"),
+      );
+      expect(wf.expected, isNull);
+    });
+
+    test("An empty BOM rejects every part", () async {
+      server.inventory.bomItems.clear();
+      await wf.scanPart("MFR:102");
+      expect(wf.partScan, isA<ScanNotInBom>());
+      expect((wf.partScan as ScanNotInBom).message, contains("its 0 lines"));
+    });
+
+    test("Without a build, no BOM is loaded", () async {
+      wf.settings = const WorkflowSettings(source: source, machine: machine);
+      server.requests.clear();
+      await wf.scanPart("INV-SI1007");
+      expect(wf.partScan, isA<ScanResolved>());
+      expect(server.requests, isNot(contains("GET /api/bom/")));
+      expect(server.requests, isNot(contains("GET /api/build/1/")));
+    });
+  });
+
   group("Step 2 - select stock:", () {
     test("Scanning the empty reel again is an error", () async {
       await toStep2(); // empty reel #1007 (in the machine)
@@ -645,6 +818,20 @@ void main() {
       final again = SettingsStore(backend);
       await again.load("https://a.example.com/");
       expect(again.settings.machine?.pk, 3);
+      expect(again.settings.build, isNull);
+
+      // Build order: saved, restored, cleared
+      await again.save(again.settings.copyWith(build: await repo.getBuild(1)));
+      final withBuild = SettingsStore(backend);
+      await withBuild.load("https://a.example.com/");
+      expect(withBuild.settings.build?.reference, "BO-0001");
+      expect(withBuild.settings.build?.partName, "Assembly A");
+      expect(withBuild.settings.build?.partId, 50);
+      expect(withBuild.settings.build?.partIpn, "ASM-A");
+
+      await withBuild.save(withBuild.settings.copyWith(clearBuild: true));
+      expect(withBuild.settings.build, isNull);
+      expect(withBuild.settings.machine?.pk, 3);
 
       final other = SettingsStore(backend);
       await other.load("https://b.example.com/");

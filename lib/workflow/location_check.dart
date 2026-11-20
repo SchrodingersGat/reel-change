@@ -77,7 +77,9 @@ Future<LocationCheckResult> recheckLocations(
       a?.structural == b?.structural;
 
   if (!same(source, stored.source) || !same(machine, stored.machine)) {
-    await store.save(WorkflowSettings(source: source, machine: machine));
+    await store.save(
+      WorkflowSettings(source: source, machine: machine, build: stored.build),
+    );
   }
 
   for (final p in problems) {

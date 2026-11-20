@@ -9,6 +9,8 @@ import "package:reel_change/core/device.dart";
 import "package:reel_change/core/settings_store.dart";
 import "package:reel_change/inventree/inventree_repository.dart";
 import "package:reel_change/inventree/models.dart";
+import "package:reel_change/scanner/hardware_scanner.dart";
+import "package:reel_change/scanner/scanner_page.dart";
 import "package:reel_change/ui/log_screen.dart";
 import "package:reel_change/ui/theme.dart";
 import "package:reel_change/ui/workflow/widgets.dart";
@@ -168,6 +170,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
+  /// Choose a build order (or clear it, with [clear]).
+  Future<void> _pickBuild({bool clear = false}) async {
+    final WorkflowSettings current = widget.store.settings;
+    BuildOrderInfo? picked;
+
+    if (!clear) {
+      picked = await Navigator.of(context).push<BuildOrderInfo>(
+        MaterialPageRoute(
+          // Settings is outside the home screen's scanner scope - give the
+          // picker one so the hardware trigger works there too
+          builder: (_) => ScannerScope(
+            mode: widget.store.prefs.scannerMode,
+            scans: widget.device.hardwareScans,
+            child: BuildPickerPage(repo: widget.repo),
+          ),
+        ),
+      );
+      if (picked == null || !mounted) return;
+      if (current.build?.pk == picked.pk) return;
+    } else if (current.build == null) {
+      return;
+    }
+
+    if (widget.workflowActive &&
+        !await _confirm(
+          "Reset the reel swap?",
+          "Changing the build order resets the reel swap in progress. "
+              "Nothing has been transferred yet.",
+          "CHANGE",
+        )) {
+      return;
+    }
+
+    try {
+      await widget.store.save(
+        current.copyWith(build: picked, clearBuild: picked == null),
+      );
+      _log.info(
+        "settings",
+        picked == null
+            ? "Build order cleared"
+            : "Build order set to ${picked.displayName} "
+                  "(${picked.partName}, #${picked.pk})",
+      );
+    } catch (_) {
+      if (mounted) _snack("Settings could not be saved on this device.");
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _setPrefs(AppPreferences prefs) async {
     try {
       await widget.store.savePrefs(prefs);
@@ -232,6 +284,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.precision_manufacturing,
               location: locations.machine,
               onTap: () => _pick(machine: true),
+            ),
+            const _SectionTitle("Build order"),
+            _BuildTile(
+              buildOrder: locations.build,
+              onTap: _pickBuild,
+              onClear: () => _pickBuild(clear: true),
             ),
             const _SectionTitle("Workflow"),
             Card(
@@ -558,6 +616,325 @@ class _LocationTile extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _BuildTile extends StatelessWidget {
+  const _BuildTile({
+    required this.buildOrder,
+    required this.onTap,
+    required this.onClear,
+  });
+
+  final BuildOrderInfo? buildOrder;
+  final VoidCallback onTap;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final BuildOrderInfo? b = buildOrder;
+    final TextStyle help = TextStyle(
+      fontSize: 15,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: [
+          InkWell(
+            key: const Key("settings-build"),
+            borderRadius: BorderRadius.circular(12),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.assignment, size: 40),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Build order",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          b == null ? "None" : b.displayName,
+                          style: const TextStyle(fontSize: 18),
+                        ),
+                        if (b != null && b.partName.isNotEmpty)
+                          Text(
+                            b.partName,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          b == null
+                              ? "Optional. Choose the build being run to only allow "
+                                    "parts in its BOM (or their substitutes)."
+                              : "Only parts in this build's BOM (or their "
+                                    "substitutes) can be loaded.",
+                          style: help,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 32),
+                ],
+              ),
+            ),
+          ),
+          if (b != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: OutlinedButton.icon(
+                key: const Key("settings-build-clear"),
+                onPressed: onClear,
+                icon: const Icon(Icons.clear),
+                label: const Text("CLEAR BUILD ORDER"),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Search for and choose an outstanding build order, or scan its barcode
+/// (camera, hardware trigger, or typed reference).
+class BuildPickerPage extends StatefulWidget {
+  const BuildPickerPage({super.key, required this.repo});
+
+  final InvenTreeRepository repo;
+
+  @override
+  State<BuildPickerPage> createState() => _BuildPickerPageState();
+}
+
+class _BuildPickerPageState extends State<BuildPickerPage> {
+  final TextEditingController _search = TextEditingController();
+  Timer? _debounce;
+
+  List<BuildOrderInfo> _results = [];
+  String? _error;
+  bool _loading = false;
+  int _request = 0;
+
+  // Looking up a scanned barcode
+  bool _scanning = false;
+  String? _scanError;
+
+  static const String _scanTitle = "Scan build order";
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _scan() async {
+    final String? barcode = await scanBarcode(context, title: _scanTitle);
+    if (barcode != null) await _resolve(barcode);
+  }
+
+  Future<void> _type() async {
+    final String? barcode = await enterBarcodeManually(
+      context,
+      title: _scanTitle,
+    );
+    if (barcode != null) await _resolve(barcode);
+  }
+
+  /// Look up a scanned barcode; choose the build if it matches one.
+  Future<void> _resolve(String barcode) async {
+    if (_scanning || !mounted) return;
+    setState(() {
+      _scanning = true;
+      _scanError = null;
+    });
+
+    appLog.info("settings", "Build order scan: ${logSnippet(barcode)}");
+    final BuildLookup result = await widget.repo.resolveBuildBarcode(barcode);
+    if (!mounted) return;
+
+    final BuildOrderInfo? build = result.build;
+    if (build != null) {
+      Navigator.of(context).pop(build);
+      return;
+    }
+
+    appLog.warning("settings", "Build order scan: ${result.error}");
+    setState(() {
+      _scanning = false;
+      _scanError = result.error;
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _load);
+  }
+
+  Future<void> _load() async {
+    final int request = ++_request;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await widget.repo.searchBuilds(_search.text);
+      if (!mounted || request != _request) return;
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted || request != _request) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => HardwareScanListener(
+    enabled: !_scanning,
+    onScan: _resolve,
+    child: Scaffold(
+      appBar: AppBar(title: const Text("Build order")),
+      body: SafeArea(child: _body(context)),
+    ),
+  );
+
+  Widget _body(BuildContext context) {
+    final bool hardware = ScannerScope.maybeOf(context)?.hardware ?? false;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  key: const Key("build-scan"),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  onPressed: _scanning ? null : _scan,
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text("SCAN BUILD ORDER"),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.outlined(
+                key: const Key("build-type"),
+                tooltip: "Type build reference",
+                iconSize: 28,
+                onPressed: _scanning ? null : _type,
+                icon: const Icon(Icons.keyboard),
+              ),
+            ],
+          ),
+        ),
+        if (hardware)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              "Or press the scanner trigger.",
+              key: Key("build-trigger-hint"),
+            ),
+          ),
+        if (_scanning)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              "Looking up build order...",
+              style: TextStyle(fontSize: 17),
+            ),
+          ),
+        if (_scanError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: StatusPanel(
+              key: const Key("build-scan-error"),
+              kind: StatusKind.error,
+              title: "Build order not found",
+              message: _scanError!,
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _search,
+            onChanged: _onChanged,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: "Search build orders",
+              prefixIcon: Icon(Icons.search),
+            ),
+          ),
+        ),
+        if (_loading) const LinearProgressIndicator(),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: StatusPanel(
+              kind: StatusKind.error,
+              title: "Search failed",
+              message: _error!,
+            ),
+          ),
+        if (!_loading && _error == null && _results.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              "No outstanding build orders found.",
+              style: TextStyle(fontSize: 17),
+            ),
+          ),
+        Expanded(
+          child: ListView.separated(
+            itemCount: _results.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final BuildOrderInfo b = _results[i];
+              return ListTile(
+                minTileHeight: 64,
+                leading: const Icon(Icons.assignment, size: 32),
+                title: Text(
+                  "${b.displayName}  ·  ${b.partName}",
+                  style: const TextStyle(fontSize: 18),
+                ),
+                subtitle: Text(
+                  [
+                    b.title,
+                    "Qty ${formatQuantity(b.quantity)}",
+                    b.statusText,
+                  ].where((s) => s.isNotEmpty).join("  ·  "),
+                ),
+                onTap: () => Navigator.of(context).pop(b),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Search for and choose a stock location.

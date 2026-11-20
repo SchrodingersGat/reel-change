@@ -7,6 +7,7 @@ import "package:reel_change/core/app_log.dart";
 import "package:reel_change/core/device.dart";
 import "package:reel_change/core/settings_store.dart";
 import "package:reel_change/inventree/inventree_repository.dart";
+import "package:reel_change/inventree/models.dart";
 import "package:reel_change/scanner/hardware_scanner.dart";
 import "package:reel_change/ui/settings_screen.dart";
 import "package:reel_change/ui/theme.dart";
@@ -107,7 +108,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final WorkflowSettings s = widget.settings.settings;
     final bool changed =
         s.source?.pk != _workflow.settings.source?.pk ||
-        s.machine?.pk != _workflow.settings.machine?.pk;
+        s.machine?.pk != _workflow.settings.machine?.pk ||
+        s.build?.pk != _workflow.settings.build?.pk;
 
     _workflow.settings = s;
     if (changed) _workflow.reset();
@@ -217,6 +219,11 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (info != null) LoginStatusBanner(info: info),
+                if (configured)
+                  BuildBanner(
+                    buildOrder: widget.settings.settings.build,
+                    onTap: _openSettings,
+                  ),
                 Expanded(
                   child: ScannerScope(
                     mode: widget.settings.prefs.scannerMode,
@@ -346,6 +353,98 @@ class _HomeScreenState extends State<HomeScreen> {
         autoReturn: widget.settings.prefs.autoReturn,
       ),
     };
+  }
+}
+
+/// Strip at the top of the main screen showing the build order parts are
+/// checked against (assembly, IPN, build reference and quantity), or that
+/// no build order is selected. Tap to change it in Settings.
+class BuildBanner extends StatelessWidget {
+  const BuildBanner({super.key, required this.buildOrder, required this.onTap});
+
+  final BuildOrderInfo? buildOrder;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final BuildOrderInfo? b = buildOrder;
+
+    final Color background = b == null
+        ? scheme.surfaceContainerHighest
+        : scheme.secondaryContainer;
+    final Color foreground = b == null
+        ? scheme.onSurfaceVariant
+        : scheme.onSecondaryContainer;
+
+    final String title = b == null
+        ? "No Build Order selected"
+        : [
+            b.partName.isEmpty ? "Part #${b.partId}" : b.partName,
+            if (b.partIpn.isNotEmpty) "(${b.partIpn})",
+          ].join(" ");
+
+    final String detail = b == null
+        ? "Any part can be loaded. Tap to choose a build."
+        : [
+            "Build ${b.displayName}",
+            "Qty ${formatQuantity(b.quantity)}",
+            b.title,
+          ].where((s) => s.isNotEmpty).join("  ·  ");
+
+    return Semantics(
+      label: b == null
+          ? "No build order selected"
+          : "Build ${b.displayName}, assembly $title",
+      button: true,
+      excludeSemantics: true,
+      child: Material(
+        color: background,
+        child: InkWell(
+          key: const Key("build-banner"),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Icon(
+                  b == null ? Icons.assignment_late : Icons.assignment,
+                  color: foreground,
+                  size: 26,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        key: const Key("build-banner-title"),
+                        style: TextStyle(
+                          color: foreground,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        detail,
+                        key: const Key("build-banner-detail"),
+                        style: TextStyle(color: foreground, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: foreground),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

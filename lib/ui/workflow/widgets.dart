@@ -218,9 +218,18 @@ class _LabelValue extends StatelessWidget {
 
 /// The scanned part: MPN (large), manufacturer, internal part, and the scanned reel if any.
 class PartSummaryCard extends StatelessWidget {
-  const PartSummaryCard({super.key, required this.part});
+  const PartSummaryCard({
+    super.key,
+    required this.part,
+    this.bomMatch,
+    this.buildOrder,
+  });
 
   final ResolvedPart part;
+
+  /// Where the part is in the selected build's BOM (if a build is selected).
+  final BomMatch? bomMatch;
+  final BuildOrderInfo? buildOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +249,16 @@ class PartSummaryCard extends StatelessWidget {
             _LabelValue("Part", part.part.displayName),
             _LabelValue("IPN", part.part.ipn),
             _LabelValue("Description", part.part.description),
+            if (bomMatch != null && buildOrder != null) ...[
+              const Divider(height: 24),
+              _LabelValue("Build", buildOrder!.displayName),
+              _LabelValue("BOM ref", bomMatch!.line.reference),
+              if (bomMatch!.substitute)
+                _LabelValue(
+                  "Substitute",
+                  "for ${bomMatch!.line.part.displayName}",
+                ),
+            ],
             if (reel != null) ...[
               const Divider(height: 24),
               _LabelValue("Scanned reel", reel.label),

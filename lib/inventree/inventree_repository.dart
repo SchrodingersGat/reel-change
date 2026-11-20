@@ -104,6 +104,37 @@ class ScanFailed extends ScanOutcome {
   final String message;
 }
 
+/// The barcode resolved, but the part is not in the selected build order's
+/// BOM (not even as a substitute). Produced by the workflow, not by
+/// [InvenTreeRepository.resolveBarcode].
+class ScanNotInBom extends ScanOutcome {
+  const ScanNotInBom({required this.scanned, required this.bom});
+
+  /// What the barcode resolved to (several if the MPN was ambiguous).
+  final List<ResolvedPart> scanned;
+  final BuildBom bom;
+
+  String get message {
+    final ResolvedPart first = scanned.first;
+    final BuildOrderInfo build = bom.build;
+    return "MPN ${first.manufacturerPart.mpn} "
+        "(${scanned.map((s) => s.part.displayName).toSet().join(" / ")}) "
+        "is not in the BOM for build ${build.displayName}"
+        "${build.partName.isEmpty ? "" : " (${build.partName})"}, "
+        "nor a substitute for any of its ${bom.lines.length} lines. "
+        "Check the reel is for this job.";
+  }
+}
+
+/// The result of scanning a build order barcode: a build, or why not.
+class BuildLookup {
+  const BuildLookup.found(BuildOrderInfo this.build) : error = null;
+  const BuildLookup.error(String this.error) : build = null;
+
+  final BuildOrderInfo? build;
+  final String? error;
+}
+
 /// A stock item which could be loaded, classified against the expected MPN.
 enum CandidateKind { exact, alternate, dataError }
 
@@ -252,6 +283,206 @@ class InvenTreeRepository {
       maxItems: 100,
     );
     return rows.map(StockLocationInfo.fromJson).toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build orders
+  // ---------------------------------------------------------------------------
+
+  Future<BuildOrderInfo> getBuild(int pk) async => BuildOrderInfo.fromJson(
+    await _getObject(
+      "build/$pk/",
+      "load build order #$pk",
+      query: {"part_detail": "true"},
+    ),
+  );
+
+  /// Outstanding (not complete / cancelled) build orders, newest first.
+  Future<List<BuildOrderInfo>> searchBuilds(String search) async {
+    final rows = await _getList(
+      "build/",
+      "search build orders",
+      query: {
+        if (search.trim().isNotEmpty) "search": search.trim(),
+        "outstanding": "true",
+        "part_detail": "true",
+        "ordering": "-reference",
+      },
+      maxItems: 100,
+    );
+    return rows.map(BuildOrderInfo.fromJson).toList();
+  }
+
+  /// Find the build order for a scanned barcode: an InvenTree build order
+  /// label, or (if no barcode plugin recognises it) a build reference typed
+  /// in full, e.g. "BO-0012". Only outstanding builds can be used.
+  Future<BuildLookup> resolveBuildBarcode(String raw) async {
+    final String data = raw.trim();
+
+    if (data.isEmpty) return const BuildLookup.error("The barcode was empty.");
+    if (data.length > kMaxBarcodeLength) {
+      return const BuildLookup.error("The barcode is too long.");
+    }
+
+    BuildLookup checked(BuildOrderInfo b) => b.isActive
+        ? BuildLookup.found(b)
+        : BuildLookup.error(
+            "Build order ${b.displayName} is "
+            "${b.statusText.isEmpty ? "not active" : b.statusText.toLowerCase()}. "
+            "Only outstanding build orders can be selected.",
+          );
+
+    try {
+      final ApiResponse r = await api.post("barcode/", body: {"barcode": data});
+
+      if (!r.isValid ||
+          r.statusCode == 401 ||
+          r.statusCode == 403 ||
+          r.statusCode >= 500) {
+        return BuildLookup.error(_errorFor(r, "look up the barcode"));
+      }
+
+      final Map<String, dynamic> body = r.asMap();
+
+      if (r.isSuccess) {
+        for (final key in const ["build", "buildorder"]) {
+          final dynamic match = body[key];
+          if (match is Map<String, dynamic> && match["pk"] is int) {
+            return checked(await getBuild(match["pk"] as int));
+          }
+        }
+
+        final known = body.keys.where(
+          (k) =>
+              body[k] is Map && !const ["barcode_data", "instance"].contains(k),
+        );
+        if (known.isNotEmpty) {
+          return BuildLookup.error(
+            "This barcode is a ${known.first}, not a build order.",
+          );
+        }
+      }
+
+      // Not a label - try it as a build reference
+      final rows = await _getList(
+        "build/",
+        "look up the build order",
+        query: {"search": data, "part_detail": "true"},
+        maxItems: 50,
+      );
+      final matches = rows
+          .map(BuildOrderInfo.fromJson)
+          .where((b) => b.reference.toLowerCase() == data.toLowerCase())
+          .toList();
+      if (matches.length == 1) return checked(matches.single);
+
+      final PluginError? pluginError = PluginError.fromResponse(body);
+      return BuildLookup.error(
+        pluginError != null
+            ? "InvenTree's ${pluginError.plugin} plugin recognised this barcode, "
+                  "but could not match it: ${pluginError.message}"
+            : "No build order found for this barcode. "
+                  "Scan the build order label, or type the build reference.",
+      );
+    } on ApiException catch (e) {
+      return BuildLookup.error(e.message);
+    }
+  }
+
+  /// Longest BOM accepted - a longer one is an error rather than silently
+  /// truncated (which would reject parts that are in the BOM).
+  static const int maxBomLines = 5000;
+
+  /// The complete (single level) BOM of [build]'s assembly, including lines
+  /// inherited from template parts, with each line's substitutes.
+  ///
+  /// The build is re-read first, so a build which has since been completed,
+  /// cancelled or deleted is reported rather than used.
+  Future<BuildBom> getBuildBom(BuildOrderInfo build) async {
+    final BuildOrderInfo fresh;
+    try {
+      fresh = await getBuild(build.pk);
+    } on ApiException catch (e) {
+      if (e.isNotFound) {
+        throw ApiException(
+          "Build order ${build.displayName} no longer exists in InvenTree. "
+          "Choose another build order in Settings, or clear it.",
+          statusCode: e.statusCode,
+        );
+      }
+      rethrow;
+    }
+
+    if (!fresh.isActive) {
+      throw ApiException(
+        "Build order ${fresh.displayName} is "
+        "${fresh.statusText.isEmpty ? "no longer active" : fresh.statusText.toLowerCase()}. "
+        "Choose another build order in Settings, or clear it.",
+      );
+    }
+
+    final rows = await _getList(
+      "bom/",
+      "load the BOM for build ${fresh.displayName}",
+      query: {
+        "part": "${fresh.partId}",
+        "sub_part_detail": "true",
+        "substitutes": "true",
+        "ordering": "pk",
+      },
+      maxItems: maxBomLines + 1,
+    );
+
+    if (rows.length > maxBomLines) {
+      throw ApiException(
+        "The BOM for build ${fresh.displayName} has more than $maxBomLines lines.",
+      );
+    }
+
+    final List<BomLine> lines = [];
+
+    for (final row in rows) {
+      final int? pk = row["pk"] is int ? row["pk"] as int : null;
+      final int? subPart = row["sub_part"] is int
+          ? row["sub_part"] as int
+          : null;
+      if (pk == null || subPart == null) continue;
+
+      final Map<String, dynamic> detail =
+          row["sub_part_detail"] is Map<String, dynamic>
+          ? row["sub_part_detail"] as Map<String, dynamic>
+          : {"pk": subPart};
+
+      // Older servers do not include substitutes in the BOM list
+      final List<dynamic> subs = row["substitutes"] is List
+          ? row["substitutes"] as List<dynamic>
+          : await _getList(
+              "bom/substitute/",
+              "load substitutes for BOM line #$pk",
+              query: {"bom_item": "$pk"},
+            );
+
+      lines.add(
+        BomLine(
+          pk: pk,
+          part: PartInfo.fromJson({...detail, "pk": subPart}),
+          reference: (row["reference"] ?? "").toString(),
+          quantity: double.tryParse("${row["quantity"]}") ?? 0,
+          substitutes: [
+            for (final s in subs.whereType<Map<String, dynamic>>())
+              if (s["part"] is int)
+                PartInfo.fromJson({
+                  ...(s["part_detail"] is Map<String, dynamic>
+                      ? s["part_detail"] as Map<String, dynamic>
+                      : const <String, dynamic>{}),
+                  "pk": s["part"],
+                }),
+          ],
+        ),
+      );
+    }
+
+    return BuildBom(build: fresh, lines: lines);
   }
 
   // ---------------------------------------------------------------------------
