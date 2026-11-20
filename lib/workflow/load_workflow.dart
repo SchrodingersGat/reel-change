@@ -65,6 +65,27 @@ class LoadWorkflow extends ChangeNotifier {
   String _busyMessage = "";
   String get busyMessage => _busyMessage;
 
+  /// The selected build order, if any.
+  BuildOrderInfo? get build => settings.build;
+
+  // --- Build BOM ------------------------------------------------------------
+
+  /// How long a loaded BOM is reused before it is loaded again.
+  static const Duration bomMaxAge = Duration(minutes: 10);
+
+  BuildBom? _bom;
+  DateTime? _bomLoadedAt;
+
+  /// The BOM of the selected build, once loaded (null if no build is set).
+  BuildBom? get bom =>
+      build != null && _bom?.build.pk == build!.pk ? _bom : null;
+
+  /// Where the expected part is in the build's BOM (null if no build is set).
+  BomMatch? get expectedBomMatch {
+    final ResolvedPart? e = _expected;
+    return e == null ? null : bom?.match(e.part.pk);
+  }
+
   // --- Step 1 ---------------------------------------------------------------
 
   ScanOutcome? _partScan;
@@ -197,10 +218,84 @@ class LoadWorkflow extends ChangeNotifier {
         final ScanOutcome outcome = await repo.resolveBarcode(barcode);
         if (stale()) return;
 
-        _logOutcome("Step 1", outcome);
-        _partScan = outcome;
-        _expected = outcome is ScanResolved ? outcome.result : null;
+        final ScanOutcome checked = await _checkBom(outcome, stale);
+        if (stale()) return;
+
+        _logOutcome("Step 1", checked);
+        _partScan = checked;
+        _expected = checked is ScanResolved ? checked.result : null;
       });
+
+  /// The BOM for the selected build, and whether it came from the cache.
+  /// Cached unless [refresh], or it is older than [bomMaxAge].
+  Future<(BuildBom, bool)> _loadBom(
+    BuildOrderInfo build, {
+    bool refresh = false,
+  }) async {
+    final BuildBom? cached = bom;
+    final DateTime? at = _bomLoadedAt;
+    if (!refresh &&
+        cached != null &&
+        at != null &&
+        DateTime.now().difference(at) < bomMaxAge) {
+      return (cached, true);
+    }
+
+    final BuildBom fresh = await repo.getBuildBom(build);
+    _bom = fresh;
+    _bomLoadedAt = DateTime.now();
+    appLog.info(
+      "workflow",
+      "Loaded BOM for build ${fresh.build.displayName} "
+          "(${fresh.build.partName}): ${fresh.lines.length} lines, "
+          "${fresh.lines.fold<int>(0, (n, l) => n + l.substitutes.length)} substitutes",
+    );
+    return (fresh, false);
+  }
+
+  /// With a build order selected, a scanned part must be in its BOM (or be a
+  /// substitute for a BOM line). If the BOM cannot be loaded, the scan cannot
+  /// be used - the check is never skipped.
+  Future<ScanOutcome> _checkBom(
+    ScanOutcome outcome,
+    bool Function() stale,
+  ) async {
+    final BuildOrderInfo? build = this.build;
+    if (build == null) return outcome;
+
+    final List<ResolvedPart> scanned = switch (outcome) {
+      ScanResolved(:final result) => [result],
+      ScanAmbiguous(:final options) => options,
+      _ => const [],
+    };
+    if (scanned.isEmpty) return outcome;
+
+    try {
+      var (BuildBom bom, bool cached) = await _loadBom(build);
+      if (stale()) return outcome;
+
+      List<ResolvedPart> inBom() =>
+          scanned.where((s) => bom.match(s.part.pk) != null).toList();
+
+      // Not in a cached BOM: it may have been edited since - reload once
+      if (cached && inBom().isEmpty) {
+        (bom, cached) = await _loadBom(build, refresh: true);
+        if (stale()) return outcome;
+      }
+
+      final List<ResolvedPart> matches = inBom();
+
+      if (matches.isEmpty) return ScanNotInBom(scanned: scanned, bom: bom);
+      if (matches.length == 1) return ScanResolved(matches.single);
+      return ScanAmbiguous(matches);
+    } on ApiException catch (e) {
+      return ScanFailed(
+        e.message.contains(build.displayName)
+            ? e.message
+            : "Could not load the BOM for build ${build.displayName}: ${e.message}",
+      );
+    }
+  }
 
   /// Choose one of several manufacturer parts which share the scanned MPN.
   void chooseExpected(ResolvedPart option) {
@@ -220,6 +315,8 @@ class LoadWorkflow extends ChangeNotifier {
   /// The user has checked the part against the SMT machine - move to step 2.
   Future<void> confirmPart() async {
     if (_busy || _step != WorkflowStep.scanPart || _expected == null) return;
+    // A build was chosen since the scan was checked - the scan must be checked against its BOM
+    if (build != null && expectedBomMatch == null) return;
     appLog.info(
       "workflow",
       "Step 1: confirmed MPN ${_expected!.manufacturerPart.mpn} (${_expected!.part.displayName})",
@@ -346,6 +443,8 @@ class LoadWorkflow extends ChangeNotifier {
         appLog.warning("workflow", "$step: $message");
       case ScanFailed(:final message):
         appLog.error("workflow", "$step: lookup failed - $message");
+      case ScanNotInBom(:final message):
+        appLog.error("workflow", "$step: NOT IN BOM - $message");
     }
   }
 
@@ -375,6 +474,10 @@ class LoadWorkflow extends ChangeNotifier {
         _verifyFail(message);
 
       case ScanNotFound(:final message):
+        _verifyFail(message);
+
+      // Not produced in step 2 (the reel must match the confirmed part)
+      case ScanNotInBom(:final message):
         _verifyFail(message);
 
       case ScanDataError(:final issue):
@@ -548,6 +651,16 @@ class LoadWorkflow extends ChangeNotifier {
       buffer.write(" (${expected.manufacturerPart.manufacturerName})");
     }
     buffer.write(", loaded MPN ${item.mpn}.");
+
+    final BomMatch? match = expectedBomMatch;
+    if (bom != null) {
+      buffer.write(" Build ${bom!.build.displayName}");
+      if (match != null && match.line.reference.isNotEmpty) {
+        buffer.write(", BOM ref ${match.line.reference}");
+      }
+      if (match?.substitute ?? false) buffer.write(" (substitute part)");
+      buffer.write(".");
+    }
 
     if (isAlternate) buffer.write(" ALTERNATE MPN confirmed by operator.");
     if (isPartial) {

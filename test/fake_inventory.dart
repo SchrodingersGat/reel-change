@@ -11,8 +11,12 @@ import "dart:convert";
 // Part 20 "C 100n": MP 102, SP 203
 // Parts 30 / 31 share MPN "DUP-1" (MP 103 / 104) - ambiguous
 //
+// Part 50 "Assembly A": BOM line 500 = part 20 (C1, C2),
+//                       BOM line 501 = part 30 (U1), no substitutes
+// Builds: 1 BO-0001 (part 50, production), 2 BO-0002 (part 50, complete)
+//
 // Barcodes: "INV-SI<pk>" (stock item), "SUPPLIER:<sp>", "MFR:<mp>",
-//           "PARTONLY:<part>", "LOC:<pk>". Anything else: no match.
+//           "PARTONLY:<part>", "LOC:<pk>", "BUILD:<pk>". Anything else: no match.
 class FakeInventory {
   FakeInventory() {
     _stock(1000, part: 10, sp: 200, loc: 1, qty: 5000);
@@ -86,7 +90,63 @@ class FakeInventory {
       "description": "",
       "units": "",
     },
+    50: {
+      "pk": 50,
+      "name": "Assembly A",
+      "full_name": "Assembly A",
+      "IPN": "ASM-A",
+      "description": "Main board",
+      "units": "",
+    },
   };
+
+  final Map<int, Map<String, dynamic>> builds = {
+    1: {
+      "pk": 1,
+      "reference": "BO-0001",
+      "title": "First run",
+      "part": 50,
+      "quantity": 10,
+      "status": 20,
+      "status_text": "Production",
+    },
+    2: {
+      "pk": 2,
+      "reference": "BO-0002",
+      "title": "Old run",
+      "part": 50,
+      "quantity": 5,
+      "status": 40,
+      "status_text": "Complete",
+    },
+  };
+
+  /// BOM lines (sub_part, reference). Substitutes are in [bomSubstitutes].
+  final Map<int, Map<String, dynamic>> bomItems = {
+    500: {
+      "pk": 500,
+      "part": 50,
+      "sub_part": 20,
+      "reference": "C1, C2",
+      "quantity": "2",
+    },
+    501: {
+      "pk": 501,
+      "part": 50,
+      "sub_part": 30,
+      "reference": "U1",
+      "quantity": "1",
+    },
+  };
+
+  /// BOM item pk -> substitute part pks.
+  final Map<int, List<int>> bomSubstitutes = {500: [], 501: []};
+
+  /// Behave like an older server, which does not include substitutes in the BOM list.
+  bool bomOmitsSubstitutes = false;
+
+  /// Make the BOM list fail.
+  bool failBom = false;
 
   final Map<int, Map<String, dynamic>> manufacturerParts = {
     100: {
@@ -263,13 +323,16 @@ class FakeInventory {
       return match("stockitem", int.parse(si[1]!));
     }
 
-    final m = RegExp(r"^(SUPPLIER|MFR|PARTONLY|LOC):(\d+)$").firstMatch(data);
+    final m = RegExp(
+      r"^(SUPPLIER|MFR|PARTONLY|LOC|BUILD):(\d+)$",
+    ).firstMatch(data);
     if (m != null) {
       final int pk = int.parse(m[2]!);
       return switch (m[1]) {
         "SUPPLIER" => match("supplierpart", pk),
         "MFR" => match("manufacturerpart", pk),
         "PARTONLY" => match("part", pk),
+        "BUILD" => match("build", pk),
         _ => match("stocklocation", pk),
       };
     }
@@ -447,6 +510,64 @@ class FakeInventory {
 
     if ((r = m(r"company/part/(\d+)/")) != null) {
       return obj(supplierParts, r![1]!);
+    }
+
+    Map<String, dynamic> buildJson(Map<String, dynamic> b) => {
+      ...b,
+      if (q["part_detail"] == "true") "part_detail": parts[b["part"]],
+    };
+
+    if ((r = m(r"build/(\d+)/")) != null) {
+      final b = builds[int.parse(r![1]!)];
+      return b == null ? (404, {"detail": "Not found."}) : (200, buildJson(b));
+    }
+
+    if (path == "/api/build/") {
+      final String search = (q["search"] ?? "").toLowerCase();
+      final rows = builds.values
+          .where(
+            (b) =>
+                q["outstanding"] != "true" ||
+                const [10, 20, 25].contains(b["status"]),
+          )
+          .where(
+            (b) => (b["reference"] as String).toLowerCase().contains(search),
+          )
+          .map(buildJson)
+          .toList();
+      return (200, _page(rows, q));
+    }
+
+    List<Map<String, dynamic>> substitutesOf(int bomItem) => [
+      for (final p in bomSubstitutes[bomItem] ?? const <int>[])
+        {
+          "pk": bomItem * 100 + p,
+          "bom_item": bomItem,
+          "part": p,
+          "part_detail": parts[p],
+        },
+    ];
+
+    if (path == "/api/bom/") {
+      if (failBom) return (500, {"detail": "Server error"});
+      final rows = bomItems.values
+          .where((b) => q["part"] == null || "${b["part"]}" == q["part"])
+          .map(
+            (b) => {
+              ...b,
+              if (q["sub_part_detail"] == "true")
+                "sub_part_detail": parts[b["sub_part"]],
+              if (q["substitutes"] == "true" && !bomOmitsSubstitutes)
+                "substitutes": substitutesOf(b["pk"] as int),
+            },
+          )
+          .toList();
+      return (200, _page(rows, q));
+    }
+
+    if (path == "/api/bom/substitute/") {
+      final int? item = int.tryParse(q["bom_item"] ?? "");
+      return (200, _page(item == null ? [] : substitutesOf(item), q));
     }
 
     return null;

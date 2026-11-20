@@ -506,6 +506,7 @@ void main() {
     expect(find.text("SMT Line"), findsOneWidget);
 
     // Toggle auto-return off - saved immediately
+    await reveal(tester, "pref-auto-return");
     await tester.tap(find.byKey(const Key("pref-auto-return")));
     await settle(tester);
     expect(settings.prefs.autoReturn, isFalse);
@@ -559,6 +560,125 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Something went wrong"), findsOneWidget);
     await finish(tester);
+  });
+
+  testWidgets("Build order: choose in settings, banner, part not in BOM", (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2424);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+
+    await connect(tester);
+    await pumpHome(tester);
+    expect(find.text("No Build Order selected"), findsOneWidget);
+
+    // Choose BO-0001 in settings (the completed BO-0002 is not offered)
+    await tester.tap(find.byKey(const Key("open-settings")));
+    await tester.pumpAndSettle();
+    expect(find.text("None"), findsOneWidget);
+    // (not pumpAndSettle: the search progress bar animates while the real
+    // request runs, and settling would run the fake clock past its timeout)
+    await tester.tap(find.byKey(const Key("settings-build")));
+    await tester.pump();
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text("Search build orders"), findsOneWidget);
+    expect(find.textContaining("BO-0002"), findsNothing);
+    await tester.tap(find.textContaining("BO-0001"));
+    await settle(tester);
+    await tester.pumpAndSettle();
+    expect(settings.settings.build?.reference, "BO-0001");
+    expect(find.byKey(const Key("settings-build-clear")), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text("No Build Order selected"), findsNothing);
+    expect(find.text("Assembly A (ASM-A)"), findsOneWidget);
+    expect(find.text("Build BO-0001  ·  Qty 10  ·  First run"), findsOneWidget);
+
+    // Part 10 is not in the assembly's BOM
+    await typeBarcode(tester, "INV-SI1007");
+    await settle(tester); // the build and BOM are loaded too
+    expect(find.byKey(const Key("not-in-bom")), findsOneWidget);
+    expect(find.text("CONFIRM PART"), findsNothing);
+
+    // Part 20 is (C1, C2)
+    await tester.tap(find.byKey(const Key("reset-workflow")));
+    await tester.pumpAndSettle();
+    await typeBarcode(tester, "MFR:102");
+    await settle(tester);
+    expect(find.text("CONFIRM PART"), findsOneWidget);
+    expect(find.text("C1, C2"), findsOneWidget);
+    await finish(tester);
+  });
+
+  group("Build order scanning:", () {
+    Future<void> openPicker(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2424);
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsScreen(
+            store: settings,
+            repo: InvenTreeRepository(auth.api),
+            auth: auth,
+            device: device,
+          ),
+        ),
+      );
+      await settle(tester);
+      // (not pumpAndSettle: see the build order test above)
+      await tester.tap(find.byKey(const Key("settings-build")));
+      await tester.pump();
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets("Typed reference selects the build", (tester) async {
+      await connect(tester);
+      await openPicker(tester);
+
+      // Completed build: error, stays on the picker
+      await tester.tap(find.byKey(const Key("build-type")));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, "BO-0002");
+      await tester.tap(find.text("OK"));
+      await tester.pump();
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key("build-scan-error")), findsOneWidget);
+      expect(settings.settings.build, isNull);
+
+      await tester.tap(find.byKey(const Key("build-type")));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, "BO-0001");
+      await tester.tap(find.text("OK"));
+      await tester.pump();
+      await settle(tester);
+      await tester.pumpAndSettle();
+      expect(settings.settings.build?.reference, "BO-0001");
+      expect(find.text("BO-0001"), findsOneWidget); // back in Settings
+      await finish(tester);
+    });
+
+    testWidgets("Hardware trigger selects the build", (tester) async {
+      await connect(
+        tester,
+        prefs: const AppPreferences(scannerMode: ScannerMode.dataWedge),
+      );
+      await openPicker(tester);
+      expect(find.byKey(const Key("build-trigger-hint")), findsOneWidget);
+
+      device.scanner.add("BUILD:1");
+      await tester.pump();
+      await settle(tester);
+      await tester.pumpAndSettle();
+      expect(settings.settings.build?.reference, "BO-0001");
+      await finish(tester);
+    });
   });
 
   testWidgets("Settings warns when DataWedge is not installed", (tester) async {

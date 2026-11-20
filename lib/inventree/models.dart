@@ -111,6 +111,124 @@ class StockLocationInfo {
       other.pk == pk || other.pathstring.startsWith("$pathstring/");
 }
 
+/// A build order: an assembly being built (the job the SMT line is running).
+class BuildOrderInfo {
+  const BuildOrderInfo({
+    required this.pk,
+    required this.reference,
+    required this.partId,
+    this.partName = "",
+    this.partIpn = "",
+    this.title = "",
+    this.quantity = 0,
+    this.status,
+    this.statusText = "",
+  });
+
+  factory BuildOrderInfo.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> part = _map(json["part_detail"]);
+    return BuildOrderInfo(
+      pk: _int(json["pk"]) ?? -1,
+      reference: _str(json["reference"]),
+      partId: _int(json["part"]) ?? -1,
+      partName: _str(part["full_name"]).isNotEmpty
+          ? _str(part["full_name"])
+          : _str(part["name"]),
+      partIpn: _str(part["IPN"]),
+      title: _str(json["title"]),
+      quantity: _double(json["quantity"]),
+      status: _int(json["status"]),
+      statusText: _str(json["status_text"]),
+    );
+  }
+
+  final int pk;
+  final String reference;
+
+  /// The assembly being built.
+  final int partId;
+  final String partName;
+  final String partIpn;
+
+  final String title;
+  final double quantity;
+
+  /// InvenTree build status code (null if not known).
+  final int? status;
+  final String statusText;
+
+  /// Pending (10), Production (20) or On Hold (25) - not Cancelled / Complete.
+  bool get isActive => status == null || const {10, 20, 25}.contains(status);
+
+  String get displayName => reference.isNotEmpty ? reference : "#$pk";
+
+  Map<String, dynamic> toJson() => {
+    "pk": pk,
+    "reference": reference,
+    "part": partId,
+    "part_detail": {"full_name": partName, "IPN": partIpn},
+    "title": title,
+    "quantity": quantity,
+    "status": status,
+    "status_text": statusText,
+  };
+}
+
+/// One line of an assembly's bill of materials.
+class BomLine {
+  const BomLine({
+    required this.pk,
+    required this.part,
+    this.reference = "",
+    this.quantity = 0,
+    this.substitutes = const [],
+  });
+
+  final int pk;
+
+  /// The component (sub part).
+  final PartInfo part;
+
+  /// Reference designators, e.g. "R1, R4, R7".
+  final String reference;
+  final double quantity;
+
+  /// Parts which may be used in place of [part].
+  final List<PartInfo> substitutes;
+}
+
+/// Where a scanned part appears in a build's BOM.
+class BomMatch {
+  const BomMatch(this.line, {required this.substitute});
+
+  final BomLine line;
+
+  /// True if the part is a substitute for the line's part, not the part itself.
+  final bool substitute;
+}
+
+/// The complete BOM of a build order's assembly.
+class BuildBom {
+  const BuildBom({required this.build, required this.lines});
+
+  final BuildOrderInfo build;
+  final List<BomLine> lines;
+
+  /// The BOM line [partId] is used on (directly first, then as a substitute),
+  /// or null if it is not in the BOM.
+  BomMatch? match(int partId) {
+    for (final l in lines) {
+      if (l.part.pk == partId) return BomMatch(l, substitute: false);
+    }
+    for (final l in lines) {
+      if (l.substitutes.any((s) => s.pk == partId)) {
+        return BomMatch(l, substitute: true);
+      }
+    }
+    return null;
+  }
+}
+
 /// A stock item (e.g. one reel).
 class StockItemInfo {
   const StockItemInfo({

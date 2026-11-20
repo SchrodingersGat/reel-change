@@ -8,7 +8,7 @@ import "package:reel_change/inventree/models.dart";
 
 /// Device settings for the reel-loading workflow.
 class WorkflowSettings {
-  const WorkflowSettings({this.source, this.machine});
+  const WorkflowSettings({this.source, this.machine, this.build});
 
   /// Where replacement reels are taken from (including sub-locations).
   final StockLocationInfo? source;
@@ -16,14 +16,21 @@ class WorkflowSettings {
   /// The SMT machine - reels are transferred here.
   final StockLocationInfo? machine;
 
+  /// Optional: the build order being run. When set, only parts in the
+  /// assembly's BOM (or their substitutes) can be loaded.
+  final BuildOrderInfo? build;
+
   bool get isComplete => source != null && machine != null;
 
   WorkflowSettings copyWith({
     StockLocationInfo? source,
     StockLocationInfo? machine,
+    BuildOrderInfo? build,
+    bool clearBuild = false,
   }) => WorkflowSettings(
     source: source ?? this.source,
     machine: machine ?? this.machine,
+    build: clearBuild ? null : (build ?? this.build),
   );
 }
 
@@ -181,6 +188,9 @@ class SettingsStore extends ChangeNotifier {
           _settings = WorkflowSettings(
             source: loc("source"),
             machine: loc("machine"),
+            build: data["build"] is Map<String, dynamic>
+                ? BuildOrderInfo.fromJson(data["build"] as Map<String, dynamic>)
+                : null,
           );
         }
       }
@@ -198,6 +208,7 @@ class SettingsStore extends ChangeNotifier {
       "prefs": _prefs.toJson(),
       if (_settings.source != null) "source": _settings.source!.toJson(),
       if (_settings.machine != null) "machine": _settings.machine!.toJson(),
+      if (_settings.build != null) "build": _settings.build!.toJson(),
     }),
   );
 

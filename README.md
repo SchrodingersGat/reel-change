@@ -10,7 +10,7 @@ Reel Change is an Android companion app for [InvenTree](https://inventree.org). 
 
 A reel change is a guided three-step workflow:
 
-1. **Scan part:** scan the empty reel coming off the machine and confirm its MPN.
+1. **Scan part:** scan the empty reel coming off the machine and confirm its MPN. If a build order is selected, the part must be in the BOM of the assembly being built (or be a substitute for a BOM line), otherwise it cannot be loaded.
 2. **Select reel:** choose a replacement reel from the source location. Reels with an exact MPN match are listed first, then approved alternates. The chosen reel must be confirmed by scanning its label, and loading an alternate needs an extra confirmation.
 3. **Load:** check the quantity (the full reel by default, adjustable if needed) and transfer the reel into the machine location.
 
@@ -23,6 +23,7 @@ Parts or reels with missing or incorrect data in InvenTree are flagged clearly, 
 - **InvenTree sign-in:** log in with an existing InvenTree account, including two-factor authentication. The app signs back in automatically on launch, and the password is never stored on the device.
 - **Permission check:** at login the app confirms the user has the InvenTree roles needed for reel changes, and lists any that are missing.
 - **Location settings:** choose the source and machine stock locations. They are checked against the server each time the app starts.
+- **Build order check (optional):** select the build order being run in Settings, from a searchable list or by scanning its InvenTree barcode label (or typing its reference). The complete BOM of its assembly, including substitute parts, is loaded from InvenTree, and any scanned part which is not in it is rejected. The selected build is shown at the top of the screen and recorded in the stock transfer notes.
 - **Camera or Zebra scanner:** scan with the device camera, or with the built-in scanner on a Zebra device (see [Zebra scanners](#zebra-scanners)).
 - **Hands-free operation:** optionally return to step 1 automatically after a transfer, and keep the screen on during a reel swap.
 - **Self-signed servers:** trust a server's self-signed certificate after checking its fingerprint. If the certificate ever changes, the app asks again.

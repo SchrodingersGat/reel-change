@@ -191,11 +191,18 @@ void main() {
 
       final Finder heading = find.byKey(const Key("step-action"));
       final Rect box = tester.getRect(heading);
-      final double appBarBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
+      // The build order banner is always shown between the app bar and the step
+      final double bannerBottom = tester
+          .getBottomLeft(find.byKey(const Key("build-banner")))
+          .dy;
+      expect(
+        tester.getTopLeft(find.byKey(const Key("build-banner"))).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(find.byType(AppBar)).dy),
+      );
 
-      // Left edge of the content padding, directly below the app bar
+      // Left edge of the content padding, directly below the banner
       expect(box.left, 16);
-      expect(box.top, lessThanOrEqualTo(appBarBottom + 16 + 1));
+      expect(box.top, lessThanOrEqualTo(bannerBottom + 16 + 1));
       expect(tester.widget<Text>(heading).textAlign, TextAlign.start);
       expect(box.top, lessThan(tester.getTopLeft(find.text("SCAN PART")).dy));
     });
