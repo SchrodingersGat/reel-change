@@ -126,6 +126,12 @@ class LoadWorkflow extends ChangeNotifier {
   /// Set if the verification scan hit a data problem.
   DataIssue? get verifyIssue => _verifyIssue;
 
+  bool _manual = false;
+
+  /// The reel was chosen by the operator without a verification scan
+  /// (e.g. its label is missing or unreadable). Recorded in InvenTree.
+  bool get selectedWithoutScan => _manual;
+
   bool get isAlternate => _selected?.kind == CandidateKind.alternate;
 
   List<StockCandidate> get exactCandidates =>
@@ -389,6 +395,7 @@ class LoadWorkflow extends ChangeNotifier {
 
   void _clearVerification() {
     _verified = false;
+    _manual = false;
     _verifyMessage = "";
     _verifyIsError = false;
     _verifyIssue = null;
@@ -622,6 +629,36 @@ class LoadWorkflow extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Use [candidate] without a verification scan - move straight to step 3.
+  ///
+  /// For reels whose label cannot be scanned. The UI must have obtained
+  /// explicit confirmation first (including for an alternate MPN).
+  void selectWithoutScan(StockCandidate candidate) {
+    if (_busy || _step != WorkflowStep.selectStock || !candidate.selectable) {
+      return;
+    }
+    // Only reels currently listed (not a stale copy from before a refresh)
+    final listed = _candidates.where(
+      (c) => c.item.pk == candidate.item.pk && c.selectable,
+    );
+    if (listed.isEmpty) return;
+
+    final StockCandidate selected = listed.first;
+    _selected = selected;
+    _clearVerification();
+    _manual = true;
+
+    _quantity = selected.item.quantity;
+    _transferError = null;
+    appLog.warning(
+      "workflow",
+      "Step 2: reel #${selected.item.pk} (MPN ${selected.item.mpn}"
+          "${isAlternate ? ", ALTERNATE" : ""}) selected MANUALLY by operator - not scanned",
+    );
+    _step = WorkflowStep.load;
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // Step 3: load into machine
   // ---------------------------------------------------------------------------
@@ -663,6 +700,11 @@ class LoadWorkflow extends ChangeNotifier {
     }
 
     if (isAlternate) buffer.write(" ALTERNATE MPN confirmed by operator.");
+    if (_manual) {
+      buffer.write(
+        " Reel selected manually by operator WITHOUT barcode verification.",
+      );
+    }
     if (isPartial) {
       buffer.write(
         " Partial quantity: ${formatQuantity(_quantity)} of ${formatQuantity(item.quantity)}.",

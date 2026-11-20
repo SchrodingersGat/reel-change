@@ -37,6 +37,19 @@ class LoadStep extends StatelessWidget {
       banner: ExpectedPartHeader(part: workflow.expected!),
       body: StepContent(
         children: [
+          // Manual selection: the operator must check the reel by eye
+          if (workflow.selectedWithoutScan) ...[
+            StatusPanel(
+              key: const Key("manual-selection"),
+              kind: StatusKind.warning,
+              title: "NOT SCANNED",
+              message:
+                  "Reel ${item.label} was selected manually. Check the reel in "
+                  "your hand is reel ${item.label}, MPN ${item.mpn}. "
+                  "This is recorded in InvenTree.",
+            ),
+            const SizedBox(height: 12),
+          ],
           // Quantity first: it is the one thing the user may need to change
           Card(
             margin: EdgeInsets.zero,
