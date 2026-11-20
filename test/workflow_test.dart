@@ -410,6 +410,58 @@ void main() {
       },
     );
 
+    test("A reel can be used without scanning (manual override)", () async {
+      await toStep2();
+      wf.selectWithoutScan(wf.exactCandidates.last);
+      expect(wf.step, WorkflowStep.load);
+      expect(wf.selected?.item.pk, wf.exactCandidates.last.item.pk);
+      expect(wf.selectedWithoutScan, isTrue);
+      expect(wf.quantity, wf.selected!.item.quantity);
+
+      await wf.transfer();
+      expect(wf.step, WorkflowStep.done, reason: wf.transferError);
+      expect(
+        server.inventory.transfers.single["notes"],
+        contains("WITHOUT barcode verification"),
+      );
+    });
+
+    test("Manual override records an alternate MPN", () async {
+      await toStep2();
+      wf.selectWithoutScan(wf.alternateCandidates.single);
+      expect(wf.isAlternate, isTrue);
+      await wf.transfer();
+      final notes = server.inventory.transfers.single["notes"] as String;
+      expect(notes, contains("ALTERNATE MPN confirmed"));
+      expect(notes, contains("WITHOUT barcode verification"));
+    });
+
+    test("Data error reels cannot be used without scanning", () async {
+      await toStep2();
+      wf.selectWithoutScan(wf.dataErrorCandidates.first);
+      expect(wf.step, WorkflowStep.selectStock);
+      expect(wf.selected, isNull);
+    });
+
+    test(
+      "Scanned reels are not marked as manual, and reset clears it",
+      () async {
+        await toStep3(1000);
+        expect(wf.selectedWithoutScan, isFalse);
+        await wf.transfer();
+        expect(
+          server.inventory.transfers.single["notes"],
+          isNot(contains("WITHOUT barcode")),
+        );
+
+        wf.reset();
+        await toStep2();
+        wf.selectWithoutScan(wf.exactCandidates.first);
+        wf.reset();
+        expect(wf.selectedWithoutScan, isFalse);
+      },
+    );
+
     test("Changing the selection clears verification", () async {
       await toStep2();
       wf.select(wf.exactCandidates.first);

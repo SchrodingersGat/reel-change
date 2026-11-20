@@ -109,7 +109,8 @@ class SelectStockStep extends StatelessWidget {
     if (!workflow.selectionVerified) {
       return (
         "Scan Selected Reel",
-        "Scan the label on reel ${selected.item.label} to confirm it is the one you picked.",
+        "Scan the label on reel ${selected.item.label} to confirm it is the one you picked. "
+            "No barcode? Long-press the reel.",
       );
     }
     if (workflow.isAlternate) {
@@ -355,6 +356,9 @@ class _CandidateTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: workflow.busy ? null : () => workflow.select(candidate),
+        onLongPress: workflow.busy
+            ? null
+            : () => _useWithoutScan(context, workflow, candidate),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -487,4 +491,93 @@ class _BrokenTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Long-press menu on a reel: use it without a verification scan (for a reel
+/// whose label is missing or cannot be scanned), after confirmation.
+Future<void> _useWithoutScan(
+  BuildContext context,
+  LoadWorkflow workflow,
+  StockCandidate candidate,
+) async {
+  final StockItemInfo item = candidate.item;
+  final bool alternate = candidate.kind == CandidateKind.alternate;
+
+  final bool? chosen = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              "Reel ${item.label}  ·  MPN ${item.mpn}",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          ListTile(
+            key: const Key("use-without-scan"),
+            leading: const Icon(Icons.touch_app, size: 32),
+            title: const Text(
+              "Use this stock item",
+              style: TextStyle(fontSize: 18),
+            ),
+            subtitle: const Text("Without scanning its barcode"),
+            onTap: () => Navigator.pop(context, true),
+          ),
+          ListTile(
+            leading: const Icon(Icons.close, size: 32),
+            title: const Text("Cancel", style: TextStyle(fontSize: 18)),
+            onTap: () => Navigator.pop(context, false),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+  if (chosen != true || !context.mounted) return;
+
+  final bool? ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      icon: const Icon(
+        Icons.warning_amber_rounded,
+        color: StatusColors.warning,
+        size: 48,
+      ),
+      title: const Text("Use reel without scanning?"),
+      content: Text(
+        "Reel ${item.label}\n"
+        "MPN ${item.mpn}${item.manufacturerName.isEmpty ? "" : " (${item.manufacturerName})"}\n"
+        "Qty ${formatQuantity(item.quantity)}  ·  ${item.locationPath}\n\n"
+        "${alternate ? "This is an ALTERNATE MPN - expected ${workflow.expected!.manufacturerPart.mpn}. "
+                  "Only continue if this alternate is approved for the job.\n\n" : ""}"
+        "The reel will NOT be verified by its barcode. Check by eye that the "
+        "reel in your hand matches these details. "
+        "This is recorded in InvenTree.",
+        style: const TextStyle(fontSize: 17),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("CANCEL"),
+        ),
+        FilledButton(
+          key: const Key("confirm-without-scan"),
+          style: FilledButton.styleFrom(
+            backgroundColor: StatusColors.warning,
+            minimumSize: const Size(160, 48),
+          ),
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("USE THIS REEL"),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+
+  workflow.selectWithoutScan(candidate);
 }

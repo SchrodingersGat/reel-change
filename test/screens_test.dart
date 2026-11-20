@@ -278,6 +278,44 @@ void main() {
     await finish(tester);
   });
 
+  testWidgets("Long-press a reel to use it without scanning", (tester) async {
+    await connect(tester, prefs: const AppPreferences(autoReturn: false));
+    await pumpHome(tester);
+
+    await typeBarcode(tester, "INV-SI1007");
+    await tester.tap(find.text("CONFIRM PART"));
+    await settle(tester);
+
+    // Cancelling the confirmation leaves step 2 unchanged
+    await tester.longPress(find.byKey(const Key("candidate-1000")));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key("use-without-scan")));
+    await tester.pumpAndSettle();
+    expect(find.text("Use reel without scanning?"), findsOneWidget);
+    await tester.tap(find.text("CANCEL"));
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectStockStep), findsOneWidget);
+
+    await tester.longPress(find.byKey(const Key("candidate-1000")));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key("use-without-scan")));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key("confirm-without-scan")));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Load Into Machine"), findsOneWidget);
+    expect(find.byKey(const Key("manual-selection")), findsOneWidget);
+
+    await tester.tap(find.text("TRANSFER INTO MACHINE"));
+    await settle(tester);
+    expect(find.text("Transfer Complete"), findsOneWidget);
+    expect(
+      server.inventory.transfers.single["notes"],
+      contains("WITHOUT barcode verification"),
+    );
+    await finish(tester);
+  });
+
   group("Hardware scanner (DataWedge):", () {
     const dataWedge = AppPreferences(scannerMode: ScannerMode.dataWedge);
 
